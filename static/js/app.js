@@ -8,6 +8,8 @@ let devicesData = [];
 let billingHistory = [];
 let draftInvoiceItems = []; // Items in current bill invoice being created
 let hasWarnedExpiry = false; // Expiry toast helper
+let html5QrcodeScanner = null; // Scanner instance
+let scannerTargetInputId = null; // Target field ID for scanned value
 
 // DOM elements
 const timeDisplay = document.getElementById('time-display');
@@ -110,6 +112,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Modals: Forms submit listeners
     document.getElementById('medicine-form').addEventListener('submit', handleMedicineFormSubmit);
     document.getElementById('device-form').addEventListener('submit', handleDeviceFormSubmit);
+
+    // Barcode Scan launchers
+    document.getElementById('scan-med-code-btn').addEventListener('click', () => openScanner('med-code'));
+    document.getElementById('scan-dev-id-btn').addEventListener('click', () => openScanner('dev-id'));
 
     // Initial Load
     switchTab('dashboard');
@@ -915,4 +921,82 @@ function closeInvoiceModal() {
 
 function printInvoice() {
     window.print();
+}
+
+// --------------------------------------------------------------------------
+// Barcode Scanner Engine
+// --------------------------------------------------------------------------
+function openScanner(targetInputId) {
+    scannerTargetInputId = targetInputId;
+    document.getElementById('scanner-modal').classList.add('active');
+
+    // Create a new instance of Html5Qrcode
+    html5QrcodeScanner = new Html5Qrcode("scanner-view");
+
+    // Barcodes are wider than QR codes, so config box is adjusted
+    const config = { 
+        fps: 10, 
+        qrbox: { width: 300, height: 160 } 
+    };
+
+    html5QrcodeScanner.start(
+        { facingMode: "environment" }, // Prefer back camera on mobile devices
+        config,
+        onScanSuccess,
+        onScanFailure
+    ).catch(err => {
+        console.error("Camera access failed", err);
+        showToast("Webcam access failed. Verify camera connection and browser permissions.", "error");
+        closeScannerModal();
+    });
+}
+
+function onScanSuccess(decodedText, decodedResult) {
+    if (scannerTargetInputId) {
+        document.getElementById(scannerTargetInputId).value = decodedText;
+    }
+    showToast(`Barcode Scanned: ${decodedText}`, "success");
+    
+    // Play sound notification
+    playBeepSound();
+
+    closeScannerModal();
+}
+
+function onScanFailure(error) {
+    // Suppress console flood during continuous scanning frames
+}
+
+function closeScannerModal() {
+    document.getElementById('scanner-modal').classList.remove('active');
+    
+    if (html5QrcodeScanner) {
+        html5QrcodeScanner.stop().then(() => {
+            console.log("Camera feed stopped successfully.");
+            html5QrcodeScanner = null;
+        }).catch(err => {
+            console.error("Failed to stop camera stream", err);
+            html5QrcodeScanner = null;
+        });
+    }
+}
+
+function playBeepSound() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(900, audioCtx.currentTime); // 900 Hz Tone
+        gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime); // Soft volume
+
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.12); // Duration 120ms
+    } catch (e) {
+        console.warn("Audio Context sound failed", e);
+    }
 }
