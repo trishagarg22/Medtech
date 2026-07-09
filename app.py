@@ -1,0 +1,394 @@
+from flask import Flask, request, jsonify, render_template
+import mysql.connector as mysql
+from datetime import datetime, date
+
+app = Flask(__name__)
+
+# Helper function to get DB connection
+def get_db_connection():
+    return mysql.connect(
+        host='localhost',
+        user='root',
+        passwd='2210',
+        database='medtech'
+    )
+
+# Serve the frontend home page
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+# API: Dashboard Stats
+@app.route('/api/stats', methods=['GET'])
+def get_stats():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Total medicines count
+        cursor.execute("SELECT COUNT(*) as count FROM med_list")
+        med_count = cursor.fetchone()['count']
+        
+        # Total devices count
+        cursor.execute("SELECT COUNT(*) as count FROM pharma_devices")
+        dev_count = cursor.fetchone()['count']
+        
+        # Total customers count
+        cursor.execute("SELECT COUNT(*) as count FROM Customer")
+        cust_count = cursor.fetchone()['count']
+        
+        # Total revenue
+        cursor.execute("SELECT SUM(total) as revenue FROM Bill")
+        revenue_row = cursor.fetchone()
+        revenue = revenue_row['revenue'] if revenue_row['revenue'] is not None else 0.0
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "medicines": med_count,
+            "devices": dev_count,
+            "customers": cust_count,
+            "revenue": round(revenue, 2)
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# API: Medicines CRUD
+@app.route('/api/medicines', methods=['GET'])
+def get_medicines():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM med_list")
+        rows = cursor.fetchall()
+        
+        # Convert date objects to string for JSON serialization
+        for r in rows:
+            if isinstance(r['expire_date'], (date, datetime)):
+                r['expire_date'] = r['expire_date'].strftime('%Y-%m-%d')
+                
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "data": rows})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/medicines', methods=['POST'])
+def add_medicine():
+    try:
+        data = request.json
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        query = """INSERT INTO med_list 
+                   (med_code, med_name, manufacturer, dosage_form, category, expire_date, price, medstock) 
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+        params = (
+            data.get('med_code'),
+            data.get('med_name'),
+            data.get('manufacturer'),
+            data.get('dosage_form'),
+            data.get('category'),
+            data.get('expire_date'),
+            float(data.get('price', 0)),
+            int(data.get('medstock', 0))
+        )
+        
+        cursor.execute(query, params)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Medicine added successfully"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/medicines/<code_val>', methods=['PUT'])
+def update_medicine(code_val):
+    try:
+        data = request.json
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Build dynamic update statement based on fields provided
+        fields = []
+        params = []
+        
+        mapping = {
+            'med_name': 'med_name = %s',
+            'manufacturer': 'manufacturer = %s',
+            'dosage_form': 'dosage_form = %s',
+            'category': 'category = %s',
+            'expire_date': 'expire_date = %s',
+            'price': 'price = %s',
+            'medstock': 'medstock = %s'
+        }
+        
+        for key, clause in mapping.items():
+            if key in data:
+                val = data[key]
+                if key == 'price':
+                    val = float(val)
+                elif key == 'medstock':
+                    val = int(val)
+                fields.append(clause)
+                params.append(val)
+                
+        if not fields:
+            return jsonify({"success": False, "error": "No fields to update"}), 400
+            
+        query = f"UPDATE med_list SET {', '.join(fields)} WHERE med_code = %s"
+        params.append(code_val)
+        
+        cursor.execute(query, tuple(params))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Medicine updated successfully"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/medicines/<code_val>', methods=['DELETE'])
+def delete_medicine(code_val):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM med_list WHERE med_code = %s", (code_val,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Medicine deleted successfully"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# API: Healthcare Devices CRUD
+@app.route('/api/devices', methods=['GET'])
+def get_devices():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM pharma_devices")
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "data": rows})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/devices', methods=['POST'])
+def add_device():
+    try:
+        data = request.json
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        query = """INSERT INTO pharma_devices 
+                   (machine_id, name, Warranty, manufacturer, useins, price, stock) 
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)"""
+        params = (
+            data.get('machine_id'),
+            data.get('name'),
+            data.get('Warranty'),
+            data.get('manufacturer'),
+            data.get('useins'),
+            float(data.get('price', 0)),
+            int(data.get('stock', 0))
+        )
+        
+        cursor.execute(query, params)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Device added successfully"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/devices/<machine_id>', methods=['PUT'])
+def update_device(machine_id):
+    try:
+        data = request.json
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        fields = []
+        params = []
+        
+        mapping = {
+            'name': 'name = %s',
+            'Warranty': 'Warranty = %s',
+            'manufacturer': 'manufacturer = %s',
+            'useins': 'useins = %s',
+            'price': 'price = %s',
+            'stock': 'stock = %s'
+        }
+        
+        for key, clause in mapping.items():
+            if key in data:
+                val = data[key]
+                if key == 'price':
+                    val = float(val)
+                elif key == 'stock':
+                    val = int(val)
+                fields.append(clause)
+                params.append(val)
+                
+        if not fields:
+            return jsonify({"success": False, "error": "No fields to update"}), 400
+            
+        query = f"UPDATE pharma_devices SET {', '.join(fields)} WHERE machine_id = %s"
+        params.append(machine_id)
+        
+        cursor.execute(query, tuple(params))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Device updated successfully"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/devices/<machine_id>', methods=['DELETE'])
+def delete_device(machine_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM pharma_devices WHERE machine_id = %s", (machine_id,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Device deleted successfully"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# API: Customer and Bills
+@app.route('/api/bills', methods=['GET'])
+def get_bills():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        # Fetch high-level bill items grouped by bill_id and customer name
+        query = """
+            SELECT b.bill_id, c.cust_id, c.cust_name, SUM(b.total) as total_amount, b.dt_purchase, b.payment_mode
+            FROM Bill b
+            JOIN Customer c ON b.cust_id = c.cust_id
+            GROUP BY b.bill_id, c.cust_id, c.cust_name, b.dt_purchase, b.payment_mode
+            ORDER BY b.dt_purchase DESC
+        """
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        
+        for r in rows:
+            if isinstance(r['dt_purchase'], (date, datetime)):
+                r['dt_purchase'] = r['dt_purchase'].strftime('%Y-%m-%d')
+                
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "data": rows})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/bills/<bill_id>', methods=['GET'])
+def get_bill_detail(bill_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        query = """
+            SELECT c.cust_name, c.address, c.contact, 
+                   b.bill_id, b.dt_purchase, b.item_name, b.quantity, b.price, b.total, b.payment_mode
+            FROM Bill b
+            JOIN Customer c ON b.cust_id = c.cust_id
+            WHERE b.bill_id = %s
+        """
+        cursor.execute(query, (bill_id,))
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        if not rows:
+            return jsonify({"success": False, "error": "Bill not found"}), 404
+            
+        bill_info = {
+            "bill_id": rows[0]["bill_id"],
+            "cust_name": rows[0]["cust_name"],
+            "address": rows[0]["address"],
+            "contact": rows[0]["contact"],
+            "payment_mode": rows[0]["payment_mode"],
+            "dt_purchase": rows[0]["dt_purchase"].strftime('%Y-%m-%d') if isinstance(rows[0]["dt_purchase"], (date, datetime)) else rows[0]["dt_purchase"],
+            "items": [],
+            "total_amount": 0.0
+        }
+        
+        for r in rows:
+            bill_info["items"].append({
+                "item_name": r["item_name"],
+                "quantity": r["quantity"],
+                "price": r["price"],
+                "total": r["total"]
+            })
+            bill_info["total_amount"] += r["total"]
+            
+        bill_info["total_amount"] = round(bill_info["total_amount"], 2)
+        return jsonify({"success": True, "data": bill_info})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/bills', methods=['POST'])
+def create_bill():
+    conn = None
+    try:
+        data = request.json
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Start transaction
+        conn.start_transaction()
+        
+        # 1. Handle Customer
+        cust_id = data.get('cust_id')
+        cust_name = data.get('cust_name')
+        contact = data.get('contact')
+        address = data.get('address')
+        
+        # Check if customer already exists
+        cursor.execute("SELECT cust_id FROM Customer WHERE cust_id = %s", (cust_id,))
+        cust_exists = cursor.fetchone()
+        
+        if not cust_exists:
+            cursor.execute(
+                "INSERT INTO Customer (cust_id, cust_name, contact, address) VALUES (%s, %s, %s, %s)",
+                (cust_id, cust_name, contact, address)
+            )
+            
+        # 2. Insert Bill items
+        bill_id = data.get('bill_id')
+        dt_purchase = data.get('dt_purchase') or datetime.now().strftime('%Y-%m-%d')
+        payment_mode = data.get('payment_mode', 'Cash')
+        items = data.get('items', [])
+        
+        for item in items:
+            name = item.get('item_name')
+            qty = int(item.get('quantity', 1))
+            price = float(item.get('price', 0))
+            total = qty * price
+            
+            cursor.execute(
+                """INSERT INTO Bill 
+                   (bill_id, cust_id, item_name, quantity, price, total, dt_purchase, payment_mode) 
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                (bill_id, cust_id, name, qty, price, total, dt_purchase, payment_mode)
+            )
+            
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Bill recorded successfully!"})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+            conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)

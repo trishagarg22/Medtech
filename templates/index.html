@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medtech | Intelligent Pharmacy Manager</title>
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Main Style CSS -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-icon">M</div>
+                <span class="logo-text">Medtech</span>
+            </div>
+            <nav class="sidebar-menu">
+                <a href="#dashboard" class="menu-item active" id="tab-dashboard-btn">
+                    <span class="menu-icon">📊</span>
+                    <span class="menu-label">Dashboard</span>
+                </a>
+                <a href="#medicines" class="menu-item" id="tab-medicines-btn">
+                    <span class="menu-icon">💊</span>
+                    <span class="menu-label">Medicines</span>
+                </a>
+                <a href="#devices" class="menu-item" id="tab-devices-btn">
+                    <span class="menu-icon">🩺</span>
+                    <span class="menu-label">Devices</span>
+                </a>
+                <a href="#billing" class="menu-item" id="tab-billing-btn">
+                    <span class="menu-icon">🧾</span>
+                    <span class="menu-label">Billing & Bills</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-profile">
+                    <div class="user-avatar">TG</div>
+                    <div class="user-info">
+                        <div class="user-name">Trisha Garg</div>
+                        <div class="user-role">Administrator</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header Bar -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1 id="current-tab-title">Dashboard Overview</h1>
+                    <p class="page-subtitle" id="current-tab-subtitle">Welcome back! Here is a summary of Medtech operations.</p>
+                </div>
+                <div class="top-bar-actions">
+                    <div class="time-display" id="time-display">00:00:00 PM</div>
+                    <button class="btn btn-primary" id="quick-bill-btn">➕ New Bill</button>
+                </div>
+            </header>
+
+            <!-- Dashboard View -->
+            <section id="section-dashboard" class="content-section active">
+                <div class="stats-grid">
+                    <div class="stats-card">
+                        <div class="stats-header">
+                            <span class="stats-title">Total Medicines</span>
+                            <span class="stats-icon text-indigo">💊</span>
+                        </div>
+                        <div class="stats-value" id="stat-medicines">0</div>
+                        <div class="stats-trend">Active stock records</div>
+                    </div>
+                    <div class="stats-card">
+                        <div class="stats-header">
+                            <span class="stats-title">Pharma Devices</span>
+                            <span class="stats-icon text-emerald">🩺</span>
+                        </div>
+                        <div class="stats-value" id="stat-devices">0</div>
+                        <div class="stats-trend">Hardware assets</div>
+                    </div>
+                    <div class="stats-card">
+                        <div class="stats-header">
+                            <span class="stats-title">Registered Customers</span>
+                            <span class="stats-icon text-amber">👤</span>
+                        </div>
+                        <div class="stats-value" id="stat-customers">0</div>
+                        <div class="stats-trend">Patrons served</div>
+                    </div>
+                    <div class="stats-card">
+                        <div class="stats-header">
+                            <span class="stats-title">Total Revenue</span>
+                            <span class="stats-icon text-rose">💰</span>
+                        </div>
+                        <div class="stats-value" id="stat-revenue">₹0.00</div>
+                        <div class="stats-trend">Cumulative billing value</div>
+                    </div>
+                </div>
+
+                <div class="dashboard-panels">
+                    <div class="dashboard-panel">
+                        <h3>Quick Actions</h3>
+                        <div class="quick-actions-grid">
+                            <button class="action-card" onclick="openMedicineModal('add')">
+                                <span class="action-icon">💊</span>
+                                <span class="action-label">Add Medicine</span>
+                            </button>
+                            <button class="action-card" onclick="openDeviceModal('add')">
+                                <span class="action-icon">🩺</span>
+                                <span class="action-label">Add Device</span>
+                            </button>
+                            <button class="action-card" id="btn-quick-nav-billing">
+                                <span class="action-icon">🧾</span>
+                                <span class="action-label">Create Bill Invoice</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="dashboard-panel">
+                        <h3>Stock Alerts</h3>
+                        <div id="stock-alerts-list" class="alerts-list">
+                            <!-- Populated by JS -->
+                            <p class="empty-state">Loading stock alerts...</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Medicines View -->
+            <section id="section-medicines" class="content-section">
+                <div class="section-controls">
+                    <div class="search-box">
+                        <input type="text" id="med-search-input" placeholder="Search medicines by name, category, manufacturer...">
+                        <span class="search-icon">🔍</span>
+                    </div>
+                    <div class="filter-controls">
+                        <select id="med-stock-filter">
+                            <option value="all">All Stocks</option>
+                            <option value="low">Low Stock (<= 20)</option>
+                            <option value="out">Out of Stock (= 0)</option>
+                        </select>
+                        <button class="btn btn-secondary" id="med-expiry-check-btn">⚠️ Check Expiring</button>
+                        <button class="btn btn-primary" onclick="openMedicineModal('add')">➕ Add Medicine</button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="data-table" id="medicines-table">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Name</th>
+                                <th>Manufacturer</th>
+                                <th>Dosage</th>
+                                <th>Category</th>
+                                <th>Expiry Date</th>
+                                <th>Price</th>
+                                <th>Stock</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="medicines-table-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Devices View -->
+            <section id="section-devices" class="content-section">
+                <div class="section-controls">
+                    <div class="search-box">
+                        <input type="text" id="dev-search-input" placeholder="Search devices by name or manufacturer...">
+                        <span class="search-icon">🔍</span>
+                    </div>
+                    <div class="filter-controls">
+                        <div class="range-inputs">
+                            <input type="number" id="dev-price-min" placeholder="Min Price">
+                            <input type="number" id="dev-price-max" placeholder="Max Price">
+                        </div>
+                        <button class="btn btn-secondary" id="dev-filter-btn">Filter Price</button>
+                        <button class="btn btn-primary" onclick="openDeviceModal('add')">➕ Add Device</button>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="data-table" id="devices-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Warranty</th>
+                                <th>Manufacturer</th>
+                                <th>Usage Instructions</th>
+                                <th>Price</th>
+                                <th>Stock</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="devices-table-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Billing View -->
+            <section id="section-billing" class="content-section">
+                <div class="billing-tabs">
+                    <button class="billing-tab active" id="billing-subtab-new-btn">Create New Invoice</button>
+                    <button class="billing-tab" id="billing-subtab-history-btn">Billing History</button>
+                </div>
+
+                <!-- Sub-Section: Create New Invoice -->
+                <div id="billing-subtab-new" class="billing-sub-content active">
+                    <form id="billing-form" class="billing-form-grid">
+                        <!-- Customer details card -->
+                        <div class="billing-card form-section-card">
+                            <h3>1. Customer Information</h3>
+                            <div class="form-group-row">
+                                <div class="form-group">
+                                    <label for="bill-cust-id">Customer ID *</label>
+                                    <input type="text" id="bill-cust-id" placeholder="C1001" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bill-cust-name">Full Name *</label>
+                                    <input type="text" id="bill-cust-name" placeholder="John Doe" required>
+                                </div>
+                            </div>
+                            <div class="form-group-row">
+                                <div class="form-group">
+                                    <label for="bill-cust-contact">Contact No.</label>
+                                    <input type="text" id="bill-cust-contact" placeholder="9876543210">
+                                </div>
+                                <div class="form-group">
+                                    <label for="bill-cust-address">Address</label>
+                                    <input type="text" id="bill-cust-address" placeholder="123 Street Address, City">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bill parameters card -->
+                        <div class="billing-card form-section-card">
+                            <h3>2. Invoice Details</h3>
+                            <div class="form-group-row">
+                                <div class="form-group">
+                                    <label for="bill-invoice-id">Invoice/Bill ID *</label>
+                                    <input type="text" id="bill-invoice-id" placeholder="B1001" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bill-date">Date of Purchase</label>
+                                    <input type="date" id="bill-date">
+                                </div>
+                                <div class="form-group">
+                                    <label for="bill-payment">Payment Mode</label>
+                                    <select id="bill-payment">
+                                        <option value="Cash">Cash</option>
+                                        <option value="UPI">UPI</option>
+                                        <option value="Card">Card</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Items addition card -->
+                        <div class="billing-card form-section-card span-2">
+                            <h3>3. Items List</h3>
+                            
+                            <div class="item-selector-row">
+                                <div class="form-group flex-2">
+                                    <label>Select Item (Medicine / Device)</label>
+                                    <select id="bill-item-selector">
+                                        <option value="" disabled selected>Choose medicine or device...</option>
+                                        <!-- Populated via JS -->
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bill-item-qty">Quantity</label>
+                                    <input type="number" id="bill-item-qty" value="1" min="1">
+                                </div>
+                                <div class="form-group">
+                                    <label for="bill-item-price">Price Per Unit (₹)</label>
+                                    <input type="number" id="bill-item-price" step="0.01" readonly>
+                                </div>
+                                <div class="form-group align-end">
+                                    <button type="button" class="btn btn-secondary" id="add-item-to-list-btn">Add Item</button>
+                                </div>
+                            </div>
+
+                            <!-- Invoice Draft Items Table -->
+                            <div class="table-wrapper mini-table">
+                                <table class="data-table" id="invoice-items-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Item Name</th>
+                                            <th>Quantity</th>
+                                            <th>Unit Price</th>
+                                            <th>Total (₹)</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="invoice-items-body">
+                                        <tr>
+                                            <td colspan="5" class="empty-table-text">No items added to this bill yet.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="invoice-summary-row">
+                                <div class="total-label">Grand Total: <span id="bill-grand-total">₹0.00</span></div>
+                                <button type="submit" class="btn btn-primary btn-lg" id="submit-bill-btn">Submit & Print Invoice</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Sub-Section: Billing History -->
+                <div id="billing-subtab-history" class="billing-sub-content">
+                    <div class="table-wrapper">
+                        <table class="data-table" id="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Bill ID</th>
+                                    <th>Customer ID</th>
+                                    <th>Customer Name</th>
+                                    <th>Date of Purchase</th>
+                                    <th>Payment Mode</th>
+                                    <th>Total Amount</th>
+                                    <th>Invoice</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals -->
+
+    <!-- Medicine Modal (Add / Edit) -->
+    <div class="modal" id="medicine-modal">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h3 id="med-modal-title">Add Medicine</h3>
+                <span class="close-modal-btn" onclick="closeMedicineModal()">&times;</span>
+            </div>
+            <form id="medicine-form">
+                <input type="hidden" id="med-form-mode" value="add">
+                <div class="form-group">
+                    <label for="med-code">Medicine Code *</label>
+                    <input type="text" id="med-code" placeholder="M011" required>
+                </div>
+                <div class="form-group">
+                    <label for="med-name">Medicine Name *</label>
+                    <input type="text" id="med-name" placeholder="Dolo 650mg" required>
+                </div>
+                <div class="form-group">
+                    <label for="med-manufacturer">Manufacturer</label>
+                    <input type="text" id="med-manufacturer" placeholder="Micro labs limited">
+                </div>
+                <div class="form-group-row">
+                    <div class="form-group">
+                        <label for="med-dosage">Dosage Form</label>
+                        <input type="text" id="med-dosage" placeholder="Tablets">
+                    </div>
+                    <div class="form-group">
+                        <label for="med-category">Category</label>
+                        <input type="text" id="med-category" placeholder="Treat fever">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="med-expiry">Expiration Date *</label>
+                    <input type="date" id="med-expiry" required>
+                </div>
+                <div class="form-group-row">
+                    <div class="form-group">
+                        <label for="med-price">Price (₹) *</label>
+                        <input type="number" id="med-price" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="med-stock">Stock *</label>
+                        <input type="number" id="med-stock" required>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeMedicineModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Medicine</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Device Modal (Add / Edit) -->
+    <div class="modal" id="device-modal">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h3 id="dev-modal-title">Add Healthcare Device</h3>
+                <span class="close-modal-btn" onclick="closeDeviceModal()">&times;</span>
+            </div>
+            <form id="device-form">
+                <input type="hidden" id="dev-form-mode" value="add">
+                <div class="form-group">
+                    <label for="dev-id">Device ID *</label>
+                    <input type="text" id="dev-id" placeholder="P201" required>
+                </div>
+                <div class="form-group">
+                    <label for="dev-name">Device Name *</label>
+                    <input type="text" id="dev-name" placeholder="Blood Pressure Monitor" required>
+                </div>
+                <div class="form-group">
+                    <label for="dev-warranty">Warranty</label>
+                    <input type="text" id="dev-warranty" placeholder="1 year">
+                </div>
+                <div class="form-group">
+                    <label for="dev-manufacturer">Manufacturer</label>
+                    <input type="text" id="dev-manufacturer" placeholder="Morepen Labs">
+                </div>
+                <div class="form-group">
+                    <label for="dev-useins">Usage Instructions</label>
+                    <input type="text" id="dev-useins" placeholder="Use twice a day">
+                </div>
+                <div class="form-group-row">
+                    <div class="form-group">
+                        <label for="dev-price">Price (₹) *</label>
+                        <input type="number" id="dev-price" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="dev-stock">Stock *</label>
+                        <input type="number" id="dev-stock" required>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeDeviceModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Device</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Invoice Modal (Invoice Print View) -->
+    <div class="modal" id="invoice-modal">
+        <div class="modal-content invoice-modal-width glass">
+            <div class="modal-header">
+                <h3>Medtech Invoice</h3>
+                <span class="close-modal-btn" onclick="closeInvoiceModal()">&times;</span>
+            </div>
+            <div class="invoice-container-print" id="invoice-print-area">
+                <div class="invoice-header">
+                    <div class="invoice-brand">
+                        <h2>MEDTECH</h2>
+                        <p>Intelligent Pharmacy Management System</p>
+                    </div>
+                    <div class="invoice-title-block">
+                        <h1>INVOICE</h1>
+                        <p>Bill ID: <strong id="inv-bill-id">B1001</strong></p>
+                        <p>Date: <span id="inv-date">2026-07-09</span></p>
+                    </div>
+                </div>
+
+                <div class="invoice-addresses">
+                    <div class="invoice-party billing-from">
+                        <strong>Billed By:</strong>
+                        <p>Medtech Pharmacy Store</p>
+                        <p>Greenville Plaza, Sect 15</p>
+                        <p>New Delhi, 110025</p>
+                    </div>
+                    <div class="invoice-party billing-to">
+                        <strong>Billed To:</strong>
+                        <p id="inv-cust-name">Customer Name</p>
+                        <p id="inv-cust-address">Customer Address</p>
+                        <p>Contact: <span id="inv-cust-contact">Contact No</span></p>
+                    </div>
+                </div>
+
+                <table class="invoice-table">
+                    <thead>
+                        <tr>
+                            <th>Item Description</th>
+                            <th class="text-center">Qty</th>
+                            <th class="text-right">Unit Price</th>
+                            <th class="text-right">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="invoice-items-list">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+
+                <div class="invoice-summary-section">
+                    <div class="payment-method-desc">
+                        <p>Payment Mode: <strong id="inv-payment-mode">Cash</strong></p>
+                    </div>
+                    <div class="invoice-totals">
+                        <div class="total-row grand-total-highlight">
+                            <span>Grand Total:</span>
+                            <span id="inv-total-amount">₹0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="invoice-footer">
+                    <p>Thank you for choosing Medtech!</p>
+                    <p>This is a computer-generated invoice and requires no signature.</p>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeInvoiceModal()">Close</button>
+                <button class="btn btn-primary" onclick="printInvoice()">Print Invoice</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Application Script JS -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
