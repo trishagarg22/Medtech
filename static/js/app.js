@@ -10,6 +10,7 @@ let draftInvoiceItems = []; // Items in current bill invoice being created
 let hasWarnedExpiry = false; // Expiry toast helper
 let html5QrcodeScanner = null; // Scanner instance
 let scannerTargetInputId = null; // Target field ID for scanned value
+let allBillingItems = []; // Auto-suggest catalog cache
 
 // DOM elements
 const timeDisplay = document.getElementById('time-display');
@@ -100,6 +101,75 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('bill-item-price').value = selectedOption.dataset.price;
         } else {
             document.getElementById('bill-item-price').value = '';
+        }
+    });
+
+    // Billing Form: Autocomplete search input listener
+    const itemSearchInput = document.getElementById('bill-item-search');
+    const suggestionsBox = document.getElementById('bill-item-suggestions');
+
+    itemSearchInput.addEventListener('input', () => {
+        const query = itemSearchInput.value.toLowerCase().trim();
+        suggestionsBox.innerHTML = '';
+        
+        if (query.length < 2) {
+            suggestionsBox.classList.remove('active');
+            return;
+        }
+
+        const filtered = allBillingItems.filter(item => 
+            item.name.toLowerCase().includes(query)
+        );
+
+        if (filtered.length === 0) {
+            suggestionsBox.innerHTML = '<div class="suggestion-row" style="color: var(--text-dimmed); font-style: italic;">No items found</div>';
+        } else {
+            filtered.forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'suggestion-row';
+                
+                const typeClass = item.type === 'Medicine' ? 'badge-success' : 'badge-secondary';
+                
+                row.innerHTML = `
+                    <div>
+                        <strong>${item.name}</strong> 
+                        <span class="badge ${typeClass}" style="margin-left: 6px; font-size: 10px;">${item.type}</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-muted);">
+                        ₹${item.price.toFixed(2)} (Stock: ${item.stock})
+                    </div>
+                `;
+                
+                row.addEventListener('click', () => {
+                    itemSearchInput.value = item.name;
+                    
+                    // Select key in hidden selector
+                    itemSelector.value = item.key;
+                    
+                    // Dispatch change event to populate unit price
+                    itemSelector.dispatchEvent(new Event('change'));
+                    
+                    suggestionsBox.classList.remove('active');
+                    document.getElementById('bill-item-qty').focus();
+                });
+                
+                suggestionsBox.appendChild(row);
+            });
+        }
+        suggestionsBox.classList.add('active');
+    });
+
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', (e) => {
+        if (e.target !== itemSearchInput && e.target !== suggestionsBox && !suggestionsBox.contains(e.target)) {
+            suggestionsBox.classList.remove('active');
+        }
+    });
+
+    // Show suggestions on focus if query length is >= 2
+    itemSearchInput.addEventListener('focus', () => {
+        if (itemSearchInput.value.trim().length >= 2) {
+            suggestionsBox.classList.add('active');
         }
     });
 
@@ -651,8 +721,9 @@ async function populateBillingItemsDropdown() {
         const devResult = await resDev.json();
         
         const selector = document.getElementById('bill-item-selector');
-        // Save first option
         selector.innerHTML = '<option value="" disabled selected>Choose medicine or device...</option>';
+        
+        allBillingItems = []; // Reset autocomplete cache
         
         if (medResult.success) {
             medResult.data.forEach(med => {
@@ -664,6 +735,15 @@ async function populateBillingItemsDropdown() {
                     opt.dataset.name = med.med_name;
                     opt.dataset.maxStock = med.medstock;
                     selector.appendChild(opt);
+                    
+                    // Cache item for suggestions
+                    allBillingItems.push({
+                        key: `med:${med.med_code}`,
+                        name: med.med_name,
+                        price: parseFloat(med.price),
+                        stock: parseInt(med.medstock),
+                        type: 'Medicine'
+                    });
                 }
             });
         }
@@ -678,6 +758,15 @@ async function populateBillingItemsDropdown() {
                     opt.dataset.name = dev.name;
                     opt.dataset.maxStock = dev.stock;
                     selector.appendChild(opt);
+                    
+                    // Cache item for suggestions
+                    allBillingItems.push({
+                        key: `dev:${dev.machine_id}`,
+                        name: dev.name,
+                        price: parseFloat(dev.price),
+                        stock: parseInt(dev.stock),
+                        type: 'Device'
+                    });
                 }
             });
         }
@@ -693,7 +782,7 @@ function addItemToDraftList() {
     const qtyInput = document.getElementById('bill-item-qty');
     const qty = parseInt(qtyInput.value);
     
-    if (!selectedOption.value) {
+    if (!selectedOption || !selectedOption.value) {
         showToast('Please select a valid item first.', 'warning');
         return;
     }
@@ -733,8 +822,9 @@ function addItemToDraftList() {
         });
     }
     
-    // Reset selectors
+    // Reset selectors & inputs
     selector.selectedIndex = 0;
+    document.getElementById('bill-item-search').value = '';
     document.getElementById('bill-item-price').value = '';
     qtyInput.value = '1';
     

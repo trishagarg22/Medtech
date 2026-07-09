@@ -270,11 +270,12 @@
                             <h3>3. Items List</h3>
                             
                             <div class="item-selector-row">
-                                <div class="form-group flex-2">
-                                    <label>Select Item (Medicine / Device)</label>
-                                    <select id="bill-item-selector">
+                                <div class="form-group flex-2" style="position: relative;">
+                                    <label for="bill-item-search">Search Item (Medicine / Device) *</label>
+                                    <input type="text" id="bill-item-search" placeholder="Type first 2-3 words (e.g. Dolo)..." autocomplete="off">
+                                    <div id="bill-item-suggestions" class="suggestions-dropdown"></div>
+                                    <select id="bill-item-selector" style="display: none;">
                                         <option value="" disabled selected>Choose medicine or device...</option>
-                                        <!-- Populated via JS -->
                                     </select>
                                 </div>
                                 <div class="form-group">

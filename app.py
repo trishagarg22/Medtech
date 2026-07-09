@@ -372,6 +372,34 @@ def create_bill():
             qty = int(item.get('quantity', 1))
             price = float(item.get('price', 0))
             total = qty * price
+            key = item.get('key', '')
+            
+            # Check and update stock
+            if key.startswith('med:'):
+                med_code = key.split(':', 1)[1]
+                # Check current stock
+                cursor.execute("SELECT medstock, med_name FROM med_list WHERE med_code = %s", (med_code,))
+                row = cursor.fetchone()
+                if not row:
+                    raise ValueError(f"Medicine code {med_code} not found in database.")
+                current_stock = row[0]
+                if current_stock < qty:
+                    raise ValueError(f"Insufficient stock for medicine '{row[1]}'. Available: {current_stock}, Requested: {qty}")
+                # Deduct stock
+                cursor.execute("UPDATE med_list SET medstock = medstock - %s WHERE med_code = %s", (qty, med_code))
+                
+            elif key.startswith('dev:'):
+                machine_id = key.split(':', 1)[1]
+                # Check current stock
+                cursor.execute("SELECT stock, name FROM pharma_devices WHERE machine_id = %s", (machine_id,))
+                row = cursor.fetchone()
+                if not row:
+                    raise ValueError(f"Device ID {machine_id} not found in database.")
+                current_stock = row[0]
+                if current_stock < qty:
+                    raise ValueError(f"Insufficient stock for device '{row[1]}'. Available: {current_stock}, Requested: {qty}")
+                # Deduct stock
+                cursor.execute("UPDATE pharma_devices SET stock = stock - %s WHERE machine_id = %s", (qty, machine_id))
             
             cursor.execute(
                 """INSERT INTO Bill 
