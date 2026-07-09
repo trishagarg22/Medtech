@@ -7,6 +7,7 @@ let medicinesData = [];
 let devicesData = [];
 let billingHistory = [];
 let draftInvoiceItems = []; // Items in current bill invoice being created
+let hasWarnedExpiry = false; // Expiry toast helper
 
 // DOM elements
 const timeDisplay = document.getElementById('time-display');
@@ -214,15 +215,27 @@ async function loadDashboardStockAlerts() {
         alertsContainer.innerHTML = '';
 
         let alerts = [];
+        let expiredCount = 0;
 
         if (medResult.success) {
             medResult.data.forEach(med => {
-                if (med.medstock === 0) {
+                // Check if expired
+                const isExpired = new Date(med.expire_date) < new Date();
+                if (isExpired) {
+                    alerts.push({ type: 'danger', title: 'Expired Medicine ⚠️', desc: `"${med.med_name}" expired on ${med.expire_date}.` });
+                    expiredCount++;
+                } else if (med.medstock === 0) {
                     alerts.push({ type: 'danger', title: 'Out of Stock', desc: `Medicine "${med.med_name}" is empty.` });
                 } else if (med.medstock <= 20) {
                     alerts.push({ type: 'warning', title: 'Low Stock', desc: `Medicine "${med.med_name}" has ${med.medstock} left.` });
                 }
             });
+
+            // Trigger global warning toast once on load
+            if (!hasWarnedExpiry && expiredCount > 0) {
+                showToast(`Warning: There are ${expiredCount} expired medicine(s) in the database!`, 'error');
+                hasWarnedExpiry = true;
+            }
         }
 
         if (devResult.success) {
@@ -236,7 +249,7 @@ async function loadDashboardStockAlerts() {
         }
 
         if (alerts.length === 0) {
-            alertsContainer.innerHTML = '<p class="empty-state">✅ All stocks are healthy.</p>';
+            alertsContainer.innerHTML = '<p class="empty-state">✅ All stocks and expiries are healthy.</p>';
         } else {
             alerts.slice(0, 5).forEach(alert => {
                 const item = document.createElement('div');
