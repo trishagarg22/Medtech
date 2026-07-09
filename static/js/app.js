@@ -187,6 +187,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('scan-med-code-btn').addEventListener('click', () => openScanner('med-code'));
     document.getElementById('scan-dev-id-btn').addEventListener('click', () => openScanner('dev-id'));
 
+    // Close modals on Escape key press
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeInvoiceModal();
+            closeMedicineModal();
+            closeDeviceModal();
+            closeScannerModal();
+        }
+    });
+
     // Initial Load
     switchTab('dashboard');
 });
