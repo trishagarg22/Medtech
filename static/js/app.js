@@ -197,6 +197,38 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Void / Delete Invoice click handler
+    document.getElementById('void-invoice-btn').addEventListener('click', async () => {
+        const billId = document.getElementById('inv-bill-id').textContent;
+        if (!billId) return;
+        
+        if (!confirm(`Are you sure you want to void and delete Bill: ${billId}? This will delete the bill and return the stock items to the inventory.`)) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/bills/${billId}`, {
+                method: 'DELETE'
+            });
+            const result = await response.json();
+            
+            if (result.success) {
+                showToast(result.message, 'success');
+                closeInvoiceModal();
+                
+                // Refresh billing records and dashboard statistics
+                loadBillingHistory();
+                loadMedicines();
+                loadDevices();
+                loadDashboardStats();
+            } else {
+                showToast(result.error, 'error');
+            }
+        } catch (err) {
+            showToast('Error voiding/deleting invoice.', 'error');
+        }
+    });
+
     // Initial Load
     switchTab('dashboard');
 });
