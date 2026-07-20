@@ -229,8 +229,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Login form submit trigger
+    document.getElementById('login-form').addEventListener('submit', handleLoginFormSubmit);
+
+    // Logout trigger
+    document.getElementById('sidebar-logout-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        logoutAdmin();
+    });
+
     // Initial Load
-    switchTab('dashboard');
+    checkLoginSession();
 });
 
 // Clock Tick function
@@ -1131,4 +1140,87 @@ function playBeepSound() {
     } catch (e) {
         console.warn("Audio Context sound failed", e);
     }
+}
+
+// --------------------------------------------------------------------------
+// Administrator Session Lifecycle Management
+// --------------------------------------------------------------------------
+function getTodayDateString() {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+function checkLoginSession() {
+    const loginContainer = document.getElementById('login-container');
+    const appContainer = document.querySelector('.app-container');
+    const todayStr = getTodayDateString();
+    const storedLoginDate = localStorage.getItem('medtech_login_date');
+    
+    if (storedLoginDate === todayStr) {
+        loginContainer.style.display = 'none';
+        appContainer.style.display = 'flex';
+        
+        switchTab('dashboard');
+        loadDashboardStats();
+        loadBillingHistory();
+        loadMedicines();
+        loadDevices();
+    } else {
+        loginContainer.style.display = 'flex';
+        appContainer.style.display = 'none';
+        document.getElementById('login-username').focus();
+    }
+}
+
+async function handleLoginFormSubmit(e) {
+    e.preventDefault();
+    const usernameInput = document.getElementById('login-username');
+    const passwordInput = document.getElementById('login-password');
+    const username = usernameInput.value;
+    const password = passwordInput.value;
+    
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast('Login successful!', 'success');
+            
+            localStorage.setItem('medtech_login_date', getTodayDateString());
+            
+            usernameInput.value = '';
+            passwordInput.value = '';
+            
+            document.getElementById('login-container').style.display = 'none';
+            document.querySelector('.app-container').style.display = 'flex';
+            
+            switchTab('dashboard');
+            loadDashboardStats();
+            loadBillingHistory();
+            loadMedicines();
+            loadDevices();
+        } else {
+            showToast(result.error || 'Authentication failed', 'error');
+        }
+    } catch (err) {
+        showToast('Connection to auth server failed.', 'error');
+    }
+}
+
+function logoutAdmin() {
+    if (!confirm('Are you sure you want to lock the dashboard? You will need to log in again.')) {
+        return;
+    }
+    localStorage.removeItem('medtech_login_date');
+    
+    document.getElementById('login-container').style.display = 'flex';
+    document.querySelector('.app-container').style.display = 'none';
+    showToast('Dashboard locked successfully.', 'info');
 }

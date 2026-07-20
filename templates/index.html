@@ -14,7 +14,30 @@
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 </head>
 <body>
-    <div class="app-container">
+    <!-- Login Screen overlay -->
+    <div id="login-container" class="login-container">
+        <div class="login-card glass-card">
+            <div class="login-logo">
+                <img src="/static/images/logo.png" alt="Medtech Logo" class="login-logo-img">
+            </div>
+            <h2>Administrator Portal</h2>
+            <p class="login-subtitle">Sign in to unlock the pharmacy management dashboard</p>
+            
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-username">Username</label>
+                    <input type="text" id="login-username" required placeholder="Enter username" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" required placeholder="Enter password" autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" style="width: 100%; margin-top: 12px; height: 42px;">Sign In</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="app-container" style="display: none;">
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
             <div class="sidebar-header" style="justify-content: center; margin-bottom: 30px;">
@@ -36,6 +59,10 @@
                 <a href="#billing" class="menu-item" id="tab-billing-btn">
                     <span class="menu-icon">🧾</span>
                     <span class="menu-label">Billing & Bills</span>
+                </a>
+                <a href="#logout" class="menu-item" id="sidebar-logout-btn" style="margin-top: auto; color: #ef4444;">
+                    <span class="menu-icon">🔒</span>
+                    <span class="menu-label">Lock System</span>
                 </a>
             </nav>
             <div class="sidebar-footer">
