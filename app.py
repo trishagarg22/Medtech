@@ -13,6 +13,34 @@ def get_db_connection():
         database='medtech'
     )
 
+def init_db():
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS admin_credentials (
+                username VARCHAR(50) PRIMARY KEY,
+                password VARCHAR(255) NOT NULL,
+                owner_key VARCHAR(255) NOT NULL
+            )
+        """)
+        cursor.execute("SELECT COUNT(*) FROM admin_credentials")
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("""
+                INSERT INTO admin_credentials (username, password, owner_key)
+                VALUES ('admin', 'admin123', 'owner123')
+            """)
+            conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"Database initialization failed: {e}")
+        if conn:
+            conn.close()
+
+init_db()
+
 # Serve the frontend home page
 @app.route('/')
 def index():
@@ -471,10 +499,49 @@ def login():
         username = data.get('username')
         password = data.get('password')
         
-        if username == 'admin' and password == 'admin123':
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT password FROM admin_credentials WHERE username = %s", (username,))
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if row and row['password'] == password:
             return jsonify({"success": True, "message": "Login successful!"})
         else:
             return jsonify({"success": False, "error": "Invalid username or password."}), 401
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/admin/change-password', methods=['POST'])
+def change_password():
+    try:
+        data = request.json
+        owner_key = data.get('owner_key')
+        new_password = data.get('new_password')
+        
+        if not owner_key or not new_password:
+            return jsonify({"success": False, "error": "Missing required fields."}), 400
+            
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # 1. Verify owner key
+        cursor.execute("SELECT owner_key FROM admin_credentials WHERE username = 'admin'")
+        row = cursor.fetchone()
+        
+        if not row or row['owner_key'] != owner_key:
+            cursor.close()
+            conn.close()
+            return jsonify({"success": False, "error": "Invalid Owner Secret Key."}), 403
+            
+        # 2. Update administrator password
+        cursor.execute("UPDATE admin_credentials SET password = %s WHERE username = 'admin'", (new_password,))
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Administrator password updated successfully!"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 

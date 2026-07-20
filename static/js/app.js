@@ -194,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
             closeMedicineModal();
             closeDeviceModal();
             closeScannerModal();
+            closeChangePasswordModal();
         }
     });
 
@@ -237,6 +238,15 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         logoutAdmin();
     });
+
+    // Double-click profile footer to show Owner settings
+    document.getElementById('user-profile-trigger').addEventListener('dblclick', () => {
+        document.getElementById('change-password-modal').classList.add('active');
+        document.getElementById('owner-passkey').focus();
+    });
+
+    // Form submit listener for Owner settings
+    document.getElementById('change-password-form').addEventListener('submit', handleChangePasswordSubmit);
 
     // Initial Load
     checkLoginSession();
@@ -1223,4 +1233,50 @@ function logoutAdmin() {
     document.getElementById('login-container').style.display = 'flex';
     document.querySelector('.app-container').style.display = 'none';
     showToast('Dashboard locked successfully.', 'info');
+}
+
+function closeChangePasswordModal() {
+    document.getElementById('change-password-modal').classList.remove('active');
+    document.getElementById('owner-passkey').value = '';
+    document.getElementById('new-admin-password').value = '';
+    document.getElementById('confirm-admin-password').value = '';
+}
+
+async function handleChangePasswordSubmit(e) {
+    e.preventDefault();
+    const ownerKeyInput = document.getElementById('owner-passkey');
+    const newPassInput = document.getElementById('new-admin-password');
+    const confirmPassInput = document.getElementById('confirm-admin-password');
+    
+    const owner_key = ownerKeyInput.value;
+    const new_password = newPassInput.value;
+    const confirm_password = confirmPassInput.value;
+    
+    if (new_password !== confirm_password) {
+        showToast('New passwords do not match.', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/admin/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ owner_key, new_password })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(result.message, 'success');
+            closeChangePasswordModal();
+            
+            // Log out admin to enforce login with new password
+            localStorage.removeItem('medtech_login_date');
+            document.getElementById('login-container').style.display = 'flex';
+            document.querySelector('.app-container').style.display = 'none';
+        } else {
+            showToast(result.error || 'Failed to update password.', 'error');
+        }
+    } catch (err) {
+        showToast('Connection to auth server failed.', 'error');
+    }
 }

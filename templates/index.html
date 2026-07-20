@@ -66,7 +66,7 @@
                 </a>
             </nav>
             <div class="sidebar-footer">
-                <div class="user-profile">
+                <div class="user-profile" id="user-profile-trigger" title="Double click to open Owner settings" style="cursor: pointer;">
                     <div class="user-avatar">TG</div>
                     <div class="user-info">
                         <div class="user-name">Trisha Garg</div>
@@ -569,6 +569,34 @@
             <div class="modal-actions" style="margin-top: 15px; justify-content: center;">
                 <button type="button" class="btn btn-secondary" onclick="closeScannerModal()">Cancel Scan</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Owner Change Password Modal -->
+    <div class="modal" id="change-password-modal">
+        <div class="modal-content glass" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3>Owner Settings</h3>
+                <span class="close-modal-btn" onclick="closeChangePasswordModal()">&times;</span>
+            </div>
+            <form id="change-password-form">
+                <div class="form-group">
+                    <label for="owner-passkey">Owner Secret Key *</label>
+                    <input type="password" id="owner-passkey" required placeholder="Enter owner key">
+                </div>
+                <div class="form-group">
+                    <label for="new-admin-password">New Admin Password *</label>
+                    <input type="password" id="new-admin-password" required placeholder="Enter new password">
+                </div>
+                <div class="form-group">
+                    <label for="confirm-admin-password">Confirm New Password *</label>
+                    <input type="password" id="confirm-admin-password" required placeholder="Confirm new password">
+                </div>
+                <div class="modal-actions" style="margin-top: 20px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeChangePasswordModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Password</button>
+                </div>
+            </form>
         </div>
     </div>
 
