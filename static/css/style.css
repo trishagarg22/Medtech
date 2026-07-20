@@ -750,10 +750,11 @@ select option {
 .form-group-row {
     display: flex;
     gap: 16px;
+    flex-wrap: wrap;
 }
 
 .form-group-row .form-group {
-    flex: 1;
+    flex: 1 1 180px;
 }
 
 label {
@@ -1341,6 +1342,76 @@ input:focus {
 /* Print Specific Utility Styles */
 @media print {
     .no-print {
+        display: none !important;
+    }
+}
+
+/* ==========================================================================
+   Responsive Screen Size Optimizations
+   ========================================================================== */
+@media (max-width: 1366px) {
+    .main-content {
+        padding: 24px;
+        gap: 20px;
+    }
+    
+    .billing-form-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .span-2 {
+        grid-column: span 1;
+    }
+    
+    .dashboard-panels {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 1024px) {
+    .sidebar {
+        width: 220px;
+        padding: 16px;
+    }
+    
+    .main-content {
+        padding: 16px;
+    }
+}
+
+@media (max-width: 768px) {
+    .app-container {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--sidebar-border);
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 20px;
+        height: auto;
+    }
+    
+    .sidebar-header {
+        margin-bottom: 0 !important;
+    }
+    
+    .app-logo {
+        max-height: 40px !important;
+        margin-bottom: 0 !important;
+    }
+    
+    .sidebar-menu {
+        flex-direction: row;
+        gap: 10px;
+        margin-bottom: 0;
+        width: auto;
+    }
+    
+    .sidebar-footer {
         display: none !important;
     }
 }
