@@ -545,5 +545,74 @@ def change_password():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/bills/<bill_id>/return', methods=['POST'])
+def return_item(bill_id):
+    conn = None
+    try:
+        data = request.json
+        item_name = data.get('item_name')
+        return_qty = int(data.get('return_qty', 0))
+        
+        if not item_name or return_qty <= 0:
+            return jsonify({"success": False, "error": "Invalid item name or return quantity."}), 400
+            
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        conn.start_transaction()
+        
+        # 1. Fetch current transaction record details
+        cursor.execute(
+            "SELECT quantity, price, total FROM Bill WHERE bill_id = %s AND item_name = %s",
+            (bill_id, item_name)
+        )
+        row = cursor.fetchone()
+        
+        if not row:
+            cursor.close()
+            conn.close()
+            return jsonify({"success": False, "error": f"Item '{item_name}' not found in bill '{bill_id}'."}), 404
+            
+        current_qty = int(row['quantity'])
+        price = float(row['price'])
+        
+        if return_qty > current_qty:
+            cursor.close()
+            conn.close()
+            return jsonify({"success": False, "error": f"Cannot return {return_qty} units. Only {current_qty} units were purchased."}), 400
+            
+        # 2. Update stock in inventory (Medicine or Device)
+        # Search in Medicines first
+        cursor.execute("SELECT med_code FROM med_list WHERE med_name = %s", (item_name,))
+        med_row = cursor.fetchone()
+        if med_row:
+            med_code = med_row['med_code']
+            cursor.execute("UPDATE med_list SET medstock = medstock + %s WHERE med_code = %s", (return_qty, med_code))
+        else:
+            # Search in Devices
+            cursor.execute("SELECT machine_id FROM pharma_devices WHERE name = %s", (item_name,))
+            dev_row = cursor.fetchone()
+            if dev_row:
+                machine_id = dev_row['machine_id']
+                cursor.execute("UPDATE pharma_devices SET stock = stock + %s WHERE machine_id = %s", (return_qty, machine_id))
+        
+        # 3. Update the Bill details: quantity and total
+        new_qty = current_qty - return_qty
+        new_total = new_qty * price
+        
+        cursor.execute(
+            "UPDATE Bill SET quantity = %s, total = %s WHERE bill_id = %s AND item_name = %s",
+            (new_qty, new_total, bill_id, item_name)
+        )
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": f"Successfully returned {return_qty} units of '{item_name}'. Grand total has been updated and stock restored."})
+    except Exception as e:
+        if conn:
+            conn.rollback()
+            conn.close()
+        return jsonify({"success": False, "error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

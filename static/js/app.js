@@ -230,6 +230,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Toggle Password Visibility
+    document.querySelectorAll('.toggle-password-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.getAttribute('data-target');
+            const input = document.getElementById(targetId);
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.textContent = '🙈';
+            } else {
+                input.type = 'password';
+                btn.textContent = '👁️';
+            }
+        });
+    });
+
     // Login form submit trigger
     document.getElementById('login-form').addEventListener('submit', handleLoginFormSubmit);
 
@@ -1048,11 +1063,18 @@ async function openInvoicePrintView(billId) {
             
             data.items.forEach(item => {
                 const tr = document.createElement('tr');
+                let actionBtnHTML = '';
+                if (item.quantity > 0) {
+                    actionBtnHTML = `<button class="btn-return-item" onclick="promptItemReturn('${data.bill_id}', '${item.item_name}', ${item.quantity})">↩️ Return</button>`;
+                } else {
+                    actionBtnHTML = `<span style="font-size: 11px; color: var(--text-muted); font-style: italic;">Returned</span>`;
+                }
                 tr.innerHTML = `
                     <td><strong>${item.item_name}</strong></td>
                     <td class="text-center">${item.quantity}</td>
                     <td class="text-right">₹${item.price.toFixed(2)}</td>
                     <td class="text-right">₹${item.total.toFixed(2)}</td>
+                    <td class="text-center no-print">${actionBtnHTML}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -1278,5 +1300,42 @@ async function handleChangePasswordSubmit(e) {
         }
     } catch (err) {
         showToast('Connection to auth server failed.', 'error');
+    }
+}
+
+async function promptItemReturn(billId, itemName, currentQty) {
+    const returnQtyInput = prompt(`Enter quantity to return for "${itemName}" (Max: ${currentQty}):`);
+    if (returnQtyInput === null) return;
+    
+    const return_qty = parseInt(returnQtyInput, 10);
+    if (isNaN(return_qty) || return_qty <= 0 || return_qty > currentQty) {
+        alert(`Invalid return quantity. Please enter a number between 1 and ${currentQty}.`);
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/bills/${billId}/return`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_name: itemName, return_qty: return_qty })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(result.message, 'success');
+            
+            // Re-render the print view
+            openInvoicePrintView(billId);
+            
+            // Refresh inventory details and stats
+            loadBillingHistory();
+            loadMedicines();
+            loadDevices();
+            loadDashboardStats();
+        } else {
+            showToast(result.error || 'Failed to return item.', 'error');
+        }
+    } catch (err) {
+        showToast('Connection to return server failed.', 'error');
     }
 }

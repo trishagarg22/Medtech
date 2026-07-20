@@ -30,7 +30,10 @@
                 </div>
                 <div class="form-group">
                     <label for="login-password">Password</label>
-                    <input type="password" id="login-password" required placeholder="Enter password" autocomplete="current-password">
+                    <div class="password-field-wrapper">
+                        <input type="password" id="login-password" required placeholder="Enter password" autocomplete="current-password">
+                        <span class="toggle-password-btn" data-target="login-password">👁️</span>
+                    </div>
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" style="width: 100%; margin-top: 12px; height: 42px;">Sign In</button>
             </form>
@@ -520,6 +523,7 @@
                             <th class="text-center">Qty</th>
                             <th class="text-right">Unit Price</th>
                             <th class="text-right">Total</th>
+                            <th class="text-center no-print">Action</th>
                         </tr>
                     </thead>
                     <tbody id="invoice-items-list">
@@ -582,15 +586,24 @@
             <form id="change-password-form">
                 <div class="form-group">
                     <label for="owner-passkey">Owner Secret Key *</label>
-                    <input type="password" id="owner-passkey" required placeholder="Enter owner key">
+                    <div class="password-field-wrapper">
+                        <input type="password" id="owner-passkey" required placeholder="Enter owner key">
+                        <span class="toggle-password-btn" data-target="owner-passkey">👁️</span>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="new-admin-password">New Admin Password *</label>
-                    <input type="password" id="new-admin-password" required placeholder="Enter new password">
+                    <div class="password-field-wrapper">
+                        <input type="password" id="new-admin-password" required placeholder="Enter new password">
+                        <span class="toggle-password-btn" data-target="new-admin-password">👁️</span>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="confirm-admin-password">Confirm New Password *</label>
-                    <input type="password" id="confirm-admin-password" required placeholder="Confirm new password">
+                    <div class="password-field-wrapper">
+                        <input type="password" id="confirm-admin-password" required placeholder="Confirm new password">
+                        <span class="toggle-password-btn" data-target="confirm-admin-password">👁️</span>
+                    </div>
                 </div>
                 <div class="modal-actions" style="margin-top: 20px;">
                     <button type="button" class="btn btn-secondary" onclick="closeChangePasswordModal()">Cancel</button>
