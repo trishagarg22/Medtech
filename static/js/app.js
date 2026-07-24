@@ -47,6 +47,19 @@ const tabs = {
 };
 
 // --------------------------------------------------------------------------
+// Helper to auto-populate today's date on bill creation form
+function setTodayDateOnBillForm() {
+    const billDateInput = document.getElementById('bill-date');
+    if (billDateInput) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        billDateInput.value = todayStr;
+    }
+}
+
+// Initial setup on page load
+setTodayDateOnBillForm();
+
+// --------------------------------------------------------------------------
 // Initialization & Events
 // --------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
@@ -265,7 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const billId = document.getElementById('inv-bill-id').textContent;
         if (!billId) return;
         
-        if (!confirm(`Are you sure you want to void and delete Bill: ${billId}? This will delete the bill and return the stock items to the inventory.`)) {
+        if (!confirm(`Are you sure you want to delete Bill: ${billId}? (Note: Stock will NOT be added back to inventory).`)) {
             return;
         }
         
@@ -381,6 +394,7 @@ function switchTab(tabKey, subtab = null) {
         loadDevices();
     } else if (tabKey === 'billing') {
         populateBillingItemsDropdown();
+        setTodayDateOnBillForm();
         if (subtab === 'new') {
             document.getElementById('billing-subtab-new-btn').click();
         } else {
@@ -1110,7 +1124,7 @@ async function submitNewBill(e) {
         contact: document.getElementById('bill-cust-contact').value,
         address: document.getElementById('bill-cust-address').value,
         bill_id: document.getElementById('bill-invoice-id').value,
-        dt_purchase: document.getElementById('bill-date').value,
+        dt_purchase: document.getElementById('bill-date').value || new Date().toISOString().split('T')[0],
         payment_mode: document.getElementById('bill-payment').value,
         items: draftPurchasedItems,
         returned_items: draftReturnedItems
@@ -1130,6 +1144,7 @@ async function submitNewBill(e) {
             const billId = payload.bill_id;
             
             document.getElementById('billing-form').reset();
+            setTodayDateOnBillForm();
             draftPurchasedItems = [];
             draftReturnedItems = [];
             renderDraftInvoiceTables();

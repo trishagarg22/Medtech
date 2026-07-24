@@ -550,39 +550,20 @@ def delete_bill(bill_id):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Start transaction
-        conn.start_transaction()
-        
-        # 1. Fetch all items in this bill to restore stock
-        cursor.execute("SELECT item_name, quantity FROM Bill WHERE bill_id = %s", (bill_id,))
-        items = cursor.fetchall()
-        
-        if not items:
+        # Check if bill exists
+        cursor.execute("SELECT bill_id FROM Bill WHERE bill_id = %s", (bill_id,))
+        if not cursor.fetchone():
+            cursor.close()
+            conn.close()
             return jsonify({"success": False, "error": f"No bill found with ID {bill_id}."}), 404
             
-        for item_name, qty in items:
-            # Check if this item is a medicine
-            cursor.execute("SELECT med_code FROM med_list WHERE med_name = %s", (item_name,))
-            med_row = cursor.fetchone()
-            if med_row:
-                med_code = med_row[0]
-                cursor.execute("UPDATE med_list SET medstock = medstock + %s WHERE med_code = %s", (qty, med_code))
-                continue
-                
-            # Check if this item is a device
-            cursor.execute("SELECT machine_id FROM pharma_devices WHERE name = %s", (item_name,))
-            dev_row = cursor.fetchone()
-            if dev_row:
-                machine_id = dev_row[0]
-                cursor.execute("UPDATE pharma_devices SET stock = stock + %s WHERE machine_id = %s", (qty, machine_id))
-                
-        # 2. Delete the bill entries
+        # Delete the bill entries without modifying stock
         cursor.execute("DELETE FROM Bill WHERE bill_id = %s", (bill_id,))
         
         conn.commit()
         cursor.close()
         conn.close()
-        return jsonify({"success": True, "message": f"Bill {bill_id} successfully voided, and stock has been restored."})
+        return jsonify({"success": True, "message": f"Bill {bill_id} deleted successfully."})
     except Exception as e:
         if conn:
             conn.rollback()
