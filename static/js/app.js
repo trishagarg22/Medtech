@@ -6,7 +6,9 @@
 let medicinesData = [];
 let devicesData = [];
 let billingHistory = [];
-let draftInvoiceItems = []; // Items in current bill invoice being created
+let draftPurchasedItems = []; // Newly bought items in current bill invoice being created
+let draftReturnedItems = []; // Returned items in current bill invoice
+let selectedReturnItemKey = ''; // Key for returned item selected from suggestions
 let hasWarnedExpiry = false; // Expiry toast helper
 let html5QrcodeScanner = null; // Scanner instance
 let scannerTargetInputId = null; // Target field ID for scanned value
@@ -173,8 +175,68 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Billing Form: Add Item to Draft
+    // Returned Item Autocomplete search listener
+    const returnSearchInput = document.getElementById('bill-return-search');
+    const returnSuggestionsBox = document.getElementById('bill-return-suggestions');
+    if (returnSearchInput && returnSuggestionsBox) {
+        returnSearchInput.addEventListener('input', () => {
+            const query = returnSearchInput.value.toLowerCase().trim();
+            returnSuggestionsBox.innerHTML = '';
+            selectedReturnItemKey = '';
+            
+            if (query.length < 2) {
+                returnSuggestionsBox.classList.remove('active');
+                return;
+            }
+
+            const filtered = allBillingItems.filter(item => 
+                item.name.toLowerCase().includes(query)
+            );
+
+            if (filtered.length === 0) {
+                returnSuggestionsBox.innerHTML = '<div class="suggestion-row" style="color: var(--text-dimmed); font-style: italic;">Custom returned medicine</div>';
+            } else {
+                filtered.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = 'suggestion-row';
+                    const typeClass = item.type === 'Medicine' ? 'badge-success' : 'badge-secondary';
+                    row.innerHTML = `
+                        <div>
+                            <strong>${item.name}</strong> 
+                            <span class="badge ${typeClass}" style="margin-left: 6px; font-size: 10px;">${item.type}</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-muted);">
+                            ₹${item.price.toFixed(2)}
+                        </div>
+                    `;
+                    row.addEventListener('click', () => {
+                        returnSearchInput.value = item.name;
+                        document.getElementById('bill-return-price').value = item.price.toFixed(2);
+                        selectedReturnItemKey = item.key;
+                        returnSuggestionsBox.classList.remove('active');
+                        document.getElementById('bill-return-qty').focus();
+                    });
+                    returnSuggestionsBox.appendChild(row);
+                });
+            }
+            returnSuggestionsBox.classList.add('active');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (e.target !== returnSearchInput && e.target !== returnSuggestionsBox && !returnSuggestionsBox.contains(e.target)) {
+                returnSuggestionsBox.classList.remove('active');
+            }
+        });
+    }
+
+    // Billing Form: Add Purchased Item to Draft
     document.getElementById('add-item-to-list-btn').addEventListener('click', addItemToDraftList);
+
+    // Billing Form: Add Returned Item to Draft
+    const addReturnBtn = document.getElementById('add-return-item-btn');
+    if (addReturnBtn) {
+        addReturnBtn.addEventListener('click', addReturnedItemToDraft);
+    }
 
     // Billing Form: Submit Bill
     document.getElementById('billing-form').addEventListener('submit', submitNewBill);
@@ -871,7 +933,7 @@ async function populateBillingItemsDropdown() {
     }
 }
 
-// Add item to active draft list
+// Add item to active draft list (Purchased)
 function addItemToDraftList() {
     const selector = document.getElementById('bill-item-selector');
     const selectedOption = selector.options[selector.selectedIndex];
@@ -898,18 +960,17 @@ function addItemToDraftList() {
         return;
     }
     
-    // Check if item is already in list
-    const existingIndex = draftInvoiceItems.findIndex(item => item.key === itemKey);
+    const existingIndex = draftPurchasedItems.findIndex(item => item.key === itemKey);
     if (existingIndex > -1) {
-        const newQty = draftInvoiceItems[existingIndex].quantity + qty;
+        const newQty = draftPurchasedItems[existingIndex].quantity + qty;
         if (newQty > maxStock) {
             showToast(`Total quantity in draft (${newQty}) exceeds available stock (${maxStock}).`, 'warning');
             return;
         }
-        draftInvoiceItems[existingIndex].quantity = newQty;
-        draftInvoiceItems[existingIndex].total = newQty * price;
+        draftPurchasedItems[existingIndex].quantity = newQty;
+        draftPurchasedItems[existingIndex].total = newQty * price;
     } else {
-        draftInvoiceItems.push({
+        draftPurchasedItems.push({
             key: itemKey,
             item_name: name,
             quantity: qty,
@@ -918,57 +979,128 @@ function addItemToDraftList() {
         });
     }
     
-    // Reset selectors & inputs
     selector.selectedIndex = 0;
     document.getElementById('bill-item-search').value = '';
     document.getElementById('bill-item-price').value = '';
     qtyInput.value = '1';
     
-    renderDraftInvoiceTable();
+    renderDraftInvoiceTables();
 }
 
-function renderDraftInvoiceTable() {
-    const tbody = document.getElementById('invoice-items-body');
-    const totalSpan = document.getElementById('bill-grand-total');
+// Add item to active draft list (Returned)
+function addReturnedItemToDraft() {
+    const nameInput = document.getElementById('bill-return-search');
+    const qtyInput = document.getElementById('bill-return-qty');
+    const priceInput = document.getElementById('bill-return-price');
     
-    tbody.innerHTML = '';
-    if (draftInvoiceItems.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="empty-table-text">No items added to this bill yet.</td></tr>`;
-        totalSpan.textContent = '₹0.00';
+    const name = nameInput.value.trim();
+    const qty = parseInt(qtyInput.value);
+    const price = parseFloat(priceInput.value);
+    
+    if (!name) {
+        showToast('Please enter or select a returned medicine name.', 'warning');
+        return;
+    }
+    if (isNaN(qty) || qty <= 0) {
+        showToast('Return quantity must be greater than 0.', 'warning');
+        return;
+    }
+    if (isNaN(price) || price < 0) {
+        showToast('Please enter a valid price per unit for returned item.', 'warning');
         return;
     }
     
-    let grandTotal = 0;
-    
-    draftInvoiceItems.forEach((item, index) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><strong>${item.item_name}</strong></td>
-            <td>${item.quantity}</td>
-            <td>₹${item.price.toFixed(2)}</td>
-            <td>₹${item.total.toFixed(2)}</td>
-            <td>
-                <button type="button" class="table-action-btn" onclick="removeDraftItem(${index})" title="Remove">❌</button>
-            </td>
-        `;
-        grandTotal += item.total;
-        tbody.appendChild(tr);
+    draftReturnedItems.push({
+        key: selectedReturnItemKey || '',
+        item_name: name,
+        quantity: qty,
+        price: price,
+        total: qty * price
     });
     
-    totalSpan.textContent = `₹${grandTotal.toFixed(2)}`;
+    nameInput.value = '';
+    priceInput.value = '';
+    qtyInput.value = '1';
+    selectedReturnItemKey = '';
+    
+    renderDraftInvoiceTables();
 }
 
-function removeDraftItem(index) {
-    draftInvoiceItems.splice(index, 1);
-    renderDraftInvoiceTable();
+function renderDraftInvoiceTables() {
+    const tbodyPurchased = document.getElementById('invoice-items-body');
+    const tbodyReturned = document.getElementById('returned-items-body');
+    const purchasedSubtotalSpan = document.getElementById('purchased-subtotal');
+    const returnedSubtotalSpan = document.getElementById('returned-subtotal');
+    const grandTotalSpan = document.getElementById('bill-grand-total');
+    
+    // Render Purchased Items
+    tbodyPurchased.innerHTML = '';
+    let purchasedTotal = 0;
+    
+    if (draftPurchasedItems.length === 0) {
+        tbodyPurchased.innerHTML = `<tr><td colspan="5" class="empty-table-text">No purchased items added to this bill yet.</td></tr>`;
+    } else {
+        draftPurchasedItems.forEach((item, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${item.item_name}</strong></td>
+                <td class="text-center">${item.quantity}</td>
+                <td class="text-right">₹${item.price.toFixed(2)}</td>
+                <td class="text-right">₹${item.total.toFixed(2)}</td>
+                <td class="text-center">
+                    <button type="button" class="table-action-btn" onclick="removePurchasedItem(${index})" title="Remove">❌</button>
+                </td>
+            `;
+            purchasedTotal += item.total;
+            tbodyPurchased.appendChild(tr);
+        });
+    }
+    if (purchasedSubtotalSpan) purchasedSubtotalSpan.textContent = `₹${purchasedTotal.toFixed(2)}`;
+    
+    // Render Returned Items
+    tbodyReturned.innerHTML = '';
+    let returnedTotal = 0;
+    
+    if (draftReturnedItems.length === 0) {
+        tbodyReturned.innerHTML = `<tr><td colspan="5" class="empty-table-text">No returned medicines added to this bill.</td></tr>`;
+    } else {
+        draftReturnedItems.forEach((item, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${item.item_name}</strong></td>
+                <td class="text-center">${item.quantity}</td>
+                <td class="text-right">₹${item.price.toFixed(2)}</td>
+                <td class="text-right" style="color: var(--accent);">-₹${item.total.toFixed(2)}</td>
+                <td class="text-center">
+                    <button type="button" class="table-action-btn" onclick="removeReturnedItem(${index})" title="Remove">❌</button>
+                </td>
+            `;
+            returnedTotal += item.total;
+            tbodyReturned.appendChild(tr);
+        });
+    }
+    if (returnedSubtotalSpan) returnedSubtotalSpan.textContent = `-₹${returnedTotal.toFixed(2)}`;
+    
+    const netGrandTotal = Math.max(0, purchasedTotal - returnedTotal);
+    if (grandTotalSpan) grandTotalSpan.textContent = `₹${netGrandTotal.toFixed(2)}`;
+}
+
+function removePurchasedItem(index) {
+    draftPurchasedItems.splice(index, 1);
+    renderDraftInvoiceTables();
+}
+
+function removeReturnedItem(index) {
+    draftReturnedItems.splice(index, 1);
+    renderDraftInvoiceTables();
 }
 
 // Submit Invoice Form
 async function submitNewBill(e) {
     e.preventDefault();
     
-    if (draftInvoiceItems.length === 0) {
-        showToast('Please add at least one item to the invoice before submitting.', 'warning');
+    if (draftPurchasedItems.length === 0 && draftReturnedItems.length === 0) {
+        showToast('Please add at least one item (purchased or returned) to the invoice before submitting.', 'warning');
         return;
     }
     
@@ -980,7 +1112,8 @@ async function submitNewBill(e) {
         bill_id: document.getElementById('bill-invoice-id').value,
         dt_purchase: document.getElementById('bill-date').value,
         payment_mode: document.getElementById('bill-payment').value,
-        items: draftInvoiceItems
+        items: draftPurchasedItems,
+        returned_items: draftReturnedItems
     };
     
     try {
@@ -994,18 +1127,14 @@ async function submitNewBill(e) {
         if (result.success) {
             showToast('Invoice created successfully!', 'success');
             
-            // Capture the ID to print immediately
             const billId = payload.bill_id;
             
-            // Clear current form
             document.getElementById('billing-form').reset();
-            draftInvoiceItems = [];
-            renderDraftInvoiceTable();
+            draftPurchasedItems = [];
+            draftReturnedItems = [];
+            renderDraftInvoiceTables();
             
-            // Open print invoice modal
             openInvoicePrintView(billId);
-            
-            // Reload stocks dropdown list for updated quantities
             populateBillingItemsDropdown();
         } else {
             showToast(result.error, 'error');
@@ -1102,8 +1231,9 @@ async function openInvoicePrintView(billId) {
             
             const tbody = document.getElementById('invoice-items-list');
             tbody.innerHTML = '';
+            let purchasedTotal = 0;
             
-            data.items.forEach(item => {
+            (data.items || []).forEach(item => {
                 const tr = document.createElement('tr');
                 let actionBtnHTML = '';
                 if (item.quantity > 0) {
@@ -1118,8 +1248,46 @@ async function openInvoicePrintView(billId) {
                     <td class="text-right">₹${item.total.toFixed(2)}</td>
                     <td class="text-center no-print">${actionBtnHTML}</td>
                 `;
+                purchasedTotal += item.total;
                 tbody.appendChild(tr);
             });
+
+            // Render Returned Items section on print receipt (if returned items exist)
+            const returnedSection = document.getElementById('invoice-returned-section');
+            const tbodyReturned = document.getElementById('invoice-returned-items-list');
+            const purchasedSummaryRow = document.getElementById('inv-purchased-summary-row');
+            const returnedSummaryRow = document.getElementById('inv-returned-summary-row');
+            const purchasedSubtotalSpan = document.getElementById('inv-purchased-subtotal');
+            const returnedSubtotalSpan = document.getElementById('inv-returned-subtotal');
+
+            let returnedTotal = 0;
+            if (data.returned_items && data.returned_items.length > 0) {
+                returnedSection.style.display = 'block';
+                purchasedSummaryRow.style.display = 'flex';
+                returnedSummaryRow.style.display = 'flex';
+                tbodyReturned.innerHTML = '';
+                
+                data.returned_items.forEach(ret => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><strong>${ret.item_name}</strong></td>
+                        <td class="text-center">${ret.quantity}</td>
+                        <td class="text-right">₹${ret.price.toFixed(2)}</td>
+                        <td class="text-right" style="color: var(--accent);">-₹${ret.total.toFixed(2)}</td>
+                    `;
+                    returnedTotal += ret.total;
+                    tbodyReturned.appendChild(tr);
+                });
+
+                if (purchasedSubtotalSpan) purchasedSubtotalSpan.textContent = `₹${purchasedTotal.toFixed(2)}`;
+                if (returnedSubtotalSpan) returnedSubtotalSpan.textContent = `-₹${returnedTotal.toFixed(2)}`;
+            } else {
+                returnedSection.style.display = 'none';
+                purchasedSummaryRow.style.display = 'none';
+                returnedSummaryRow.style.display = 'none';
+            }
+
+            document.getElementById('inv-total-amount').textContent = `₹${data.total_amount.toFixed(2)}`;
             
             // Render Related Bills for the same contact number (recent above, old below)
             const relatedContainer = document.getElementById('related-bills-container');

@@ -373,17 +373,28 @@ def get_bill_detail(bill_id):
             "payment_mode": rows[0]["payment_mode"],
             "dt_purchase": rows[0]["dt_purchase"].strftime('%Y-%m-%d') if isinstance(rows[0]["dt_purchase"], (date, datetime)) else rows[0]["dt_purchase"],
             "items": [],
+            "returned_items": [],
             "total_amount": 0.0
         }
         
         for r in rows:
-            bill_info["items"].append({
-                "item_name": r["item_name"],
-                "quantity": r["quantity"],
-                "price": r["price"],
-                "total": r["total"]
-            })
-            bill_info["total_amount"] += r["total"]
+            qty = r["quantity"]
+            tot = float(r["total"])
+            if qty < 0 or tot < 0:
+                bill_info["returned_items"].append({
+                    "item_name": r["item_name"],
+                    "quantity": abs(qty),
+                    "price": float(r["price"]),
+                    "total": abs(tot)
+                })
+            else:
+                bill_info["items"].append({
+                    "item_name": r["item_name"],
+                    "quantity": qty,
+                    "price": float(r["price"]),
+                    "total": tot
+                })
+            bill_info["total_amount"] += tot
             
         bill_info["total_amount"] = round(bill_info["total_amount"], 2)
         
@@ -443,11 +454,12 @@ def create_bill():
                 (cust_id, cust_name, contact, address)
             )
             
-        # 2. Insert Bill items
+        # 2. Insert Bill items (Purchased)
         bill_id = data.get('bill_id')
         dt_purchase = data.get('dt_purchase') or datetime.now().strftime('%Y-%m-%d')
         payment_mode = data.get('payment_mode', 'Cash')
         items = data.get('items', [])
+        returned_items = data.get('returned_items', [])
         
         for item in items:
             name = item.get('item_name')
@@ -459,7 +471,6 @@ def create_bill():
             # Check and update stock
             if key.startswith('med:'):
                 med_code = key.split(':', 1)[1]
-                # Check current stock
                 cursor.execute("SELECT medstock, med_name FROM med_list WHERE med_code = %s", (med_code,))
                 row = cursor.fetchone()
                 if not row:
@@ -467,12 +478,10 @@ def create_bill():
                 current_stock = row[0]
                 if current_stock < qty:
                     raise ValueError(f"Insufficient stock for medicine '{row[1]}'. Available: {current_stock}, Requested: {qty}")
-                # Deduct stock
                 cursor.execute("UPDATE med_list SET medstock = medstock - %s WHERE med_code = %s", (qty, med_code))
                 
             elif key.startswith('dev:'):
                 machine_id = key.split(':', 1)[1]
-                # Check current stock
                 cursor.execute("SELECT stock, name FROM pharma_devices WHERE machine_id = %s", (machine_id,))
                 row = cursor.fetchone()
                 if not row:
@@ -480,7 +489,6 @@ def create_bill():
                 current_stock = row[0]
                 if current_stock < qty:
                     raise ValueError(f"Insufficient stock for device '{row[1]}'. Available: {current_stock}, Requested: {qty}")
-                # Deduct stock
                 cursor.execute("UPDATE pharma_devices SET stock = stock - %s WHERE machine_id = %s", (qty, machine_id))
             
             cursor.execute(
@@ -488,6 +496,41 @@ def create_bill():
                    (bill_id, cust_id, item_name, quantity, price, total, dt_purchase, payment_mode) 
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
                 (bill_id, cust_id, name, qty, price, total, dt_purchase, payment_mode)
+            )
+
+        # 3. Insert Returned items (Old medicines returned by customer)
+        for ret_item in returned_items:
+            name = ret_item.get('item_name', '')
+            qty = int(ret_item.get('quantity', 1))
+            price = float(ret_item.get('price', 0))
+            total = - (qty * price)  # Negative total to subtract from total bill
+            key = ret_item.get('key', '')
+            
+            # Add stock back to inventory
+            if key.startswith('med:'):
+                med_code = key.split(':', 1)[1]
+                cursor.execute("UPDATE med_list SET medstock = medstock + %s WHERE med_code = %s", (qty, med_code))
+            elif key.startswith('dev:'):
+                machine_id = key.split(':', 1)[1]
+                cursor.execute("UPDATE pharma_devices SET stock = stock + %s WHERE machine_id = %s", (qty, machine_id))
+            else:
+                # Try finding by name in medicines or devices
+                cursor.execute("SELECT med_code FROM med_list WHERE med_name = %s", (name,))
+                m_row = cursor.fetchone()
+                if m_row:
+                    cursor.execute("UPDATE med_list SET medstock = medstock + %s WHERE med_code = %s", (qty, m_row[0]))
+                else:
+                    cursor.execute("SELECT machine_id FROM pharma_devices WHERE name = %s", (name,))
+                    d_row = cursor.fetchone()
+                    if d_row:
+                        cursor.execute("UPDATE pharma_devices SET stock = stock + %s WHERE machine_id = %s", (qty, d_row[0]))
+            
+            displayName = name if "(Returned)" in name else f"{name} (Returned)"
+            cursor.execute(
+                """INSERT INTO Bill 
+                   (bill_id, cust_id, item_name, quantity, price, total, dt_purchase, payment_mode) 
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                (bill_id, cust_id, displayName, -qty, price, total, dt_purchase, payment_mode)
             )
             
         conn.commit()
