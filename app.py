@@ -296,24 +296,52 @@ def get_bills():
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        # Fetch high-level bill items grouped by bill_id and customer name
+        # Fetch high-level bill items including contact number
         query = """
-            SELECT b.bill_id, c.cust_id, c.cust_name, SUM(b.total) as total_amount, b.dt_purchase, b.payment_mode
+            SELECT b.bill_id, c.cust_id, c.cust_name, c.contact, SUM(b.total) as total_amount, b.dt_purchase, b.payment_mode
             FROM Bill b
             JOIN Customer c ON b.cust_id = c.cust_id
-            GROUP BY b.bill_id, c.cust_id, c.cust_name, b.dt_purchase, b.payment_mode
-            ORDER BY b.dt_purchase DESC
+            GROUP BY b.bill_id, c.cust_id, c.cust_name, c.contact, b.dt_purchase, b.payment_mode
+            ORDER BY b.dt_purchase DESC, b.bill_id DESC
         """
         cursor.execute(query)
         rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
         
         for r in rows:
             if isinstance(r['dt_purchase'], (date, datetime)):
                 r['dt_purchase'] = r['dt_purchase'].strftime('%Y-%m-%d')
-                
-        cursor.close()
-        conn.close()
-        return jsonify({"success": True, "data": rows})
+            r['contact'] = (r['contact'] or '').strip()
+
+        # Group bills by mobile number (contact)
+        # Bills of people having the same mobile number are shown together,
+        # with the recent one above and old ones below.
+        groups = {}
+        for r in rows:
+            contact_key = r['contact']
+            if not contact_key:
+                contact_key = f"__NO_CONTACT_{r['bill_id']}__"
+            if contact_key not in groups:
+                groups[contact_key] = []
+            groups[contact_key].append(r)
+            
+        # Within each group, sort bills by dt_purchase DESC, bill_id DESC (recent above, old below)
+        for key in groups:
+            groups[key].sort(key=lambda x: (str(x['dt_purchase']), str(x['bill_id'])), reverse=True)
+            
+        # Sort groups by the date of their most recent bill (descending)
+        sorted_group_keys = sorted(
+            groups.keys(),
+            key=lambda k: (str(groups[k][0]['dt_purchase']), str(groups[k][0]['bill_id'])),
+            reverse=True
+        )
+        
+        ordered_bills = []
+        for k in sorted_group_keys:
+            ordered_bills.extend(groups[k])
+            
+        return jsonify({"success": True, "data": ordered_bills})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -331,17 +359,17 @@ def get_bill_detail(bill_id):
         """
         cursor.execute(query, (bill_id,))
         rows = cursor.fetchall()
-        cursor.close()
-        conn.close()
         
         if not rows:
+            cursor.close()
+            conn.close()
             return jsonify({"success": False, "error": "Bill not found"}), 404
             
         bill_info = {
             "bill_id": rows[0]["bill_id"],
             "cust_name": rows[0]["cust_name"],
             "address": rows[0]["address"],
-            "contact": rows[0]["contact"],
+            "contact": (rows[0]["contact"] or '').strip(),
             "payment_mode": rows[0]["payment_mode"],
             "dt_purchase": rows[0]["dt_purchase"].strftime('%Y-%m-%d') if isinstance(rows[0]["dt_purchase"], (date, datetime)) else rows[0]["dt_purchase"],
             "items": [],
@@ -358,6 +386,32 @@ def get_bill_detail(bill_id):
             bill_info["total_amount"] += r["total"]
             
         bill_info["total_amount"] = round(bill_info["total_amount"], 2)
+        
+        # Fetch all related bills for the same contact number (recent above, old below)
+        related_bills = []
+        if bill_info["contact"]:
+            rel_query = """
+                SELECT b.bill_id, c.cust_name, SUM(b.total) as total_amount, b.dt_purchase, b.payment_mode
+                FROM Bill b
+                JOIN Customer c ON b.cust_id = c.cust_id
+                WHERE c.contact = %s
+                GROUP BY b.bill_id, c.cust_name, b.dt_purchase, b.payment_mode
+                ORDER BY b.dt_purchase DESC, b.bill_id DESC
+            """
+            cursor.execute(rel_query, (bill_info["contact"],))
+            rel_rows = cursor.fetchall()
+            for r in rel_rows:
+                related_bills.append({
+                    "bill_id": r["bill_id"],
+                    "cust_name": r["cust_name"],
+                    "payment_mode": r["payment_mode"],
+                    "dt_purchase": r["dt_purchase"].strftime('%Y-%m-%d') if isinstance(r["dt_purchase"], (date, datetime)) else r["dt_purchase"],
+                    "total_amount": round(float(r["total_amount"]), 2)
+                })
+        bill_info["related_bills"] = related_bills
+
+        cursor.close()
+        conn.close()
         return jsonify({"success": True, "data": bill_info})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

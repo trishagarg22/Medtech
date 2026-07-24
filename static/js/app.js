@@ -263,6 +263,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // Form submit listener for Owner settings
     document.getElementById('change-password-form').addEventListener('submit', handleChangePasswordSubmit);
 
+    // Search filter for Billing History
+    const historySearchInput = document.getElementById('history-search-input');
+    if (historySearchInput) {
+        historySearchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            if (!query) {
+                renderHistoryTable(billingHistory);
+                return;
+            }
+            const filtered = billingHistory.filter(bill => 
+                (bill.bill_id && bill.bill_id.toLowerCase().includes(query)) ||
+                (bill.cust_id && bill.cust_id.toLowerCase().includes(query)) ||
+                (bill.cust_name && bill.cust_name.toLowerCase().includes(query)) ||
+                (bill.contact && bill.contact.toLowerCase().includes(query)) ||
+                (bill.payment_mode && bill.payment_mode.toLowerCase().includes(query))
+            );
+            renderHistoryTable(filtered);
+        });
+    }
+
     // Initial Load
     checkLoginSession();
 });
@@ -1013,18 +1033,40 @@ async function loadBillingHistory() {
 
 function renderHistoryTable(data) {
     const tbody = document.getElementById('history-table-body');
+    const badge = document.getElementById('history-count-badge');
     tbody.innerHTML = '';
+    
+    if (badge) {
+        badge.textContent = `Showing ${data.length} invoice(s)`;
+    }
+    
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="empty-table-text">No invoices found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="empty-table-text">No invoices found.</td></tr>`;
         return;
     }
     
+    let prevContact = null;
     data.forEach(bill => {
         const tr = document.createElement('tr');
+        
+        // Visual grouping indicator if this bill shares the same contact number with the previous row
+        const currentContact = (bill.contact || '').trim();
+        if (currentContact && currentContact === prevContact) {
+            tr.classList.add('grouped-same-contact');
+        } else if (currentContact) {
+            tr.classList.add('group-header-contact');
+        }
+        prevContact = currentContact;
+        
+        const contactHTML = currentContact 
+            ? `<span class="contact-pill">📱 ${currentContact}</span>` 
+            : `<span style="color: var(--text-muted); font-style: italic;">N/A</span>`;
+
         tr.innerHTML = `
             <td><code>${bill.bill_id}</code></td>
             <td><code>${bill.cust_id}</code></td>
             <td><strong>${bill.cust_name}</strong></td>
+            <td>${contactHTML}</td>
             <td>${bill.dt_purchase}</td>
             <td><span class="badge badge-secondary">${bill.payment_mode}</span></td>
             <td><strong>₹${parseFloat(bill.total_amount).toFixed(2)}</strong></td>
@@ -1079,6 +1121,39 @@ async function openInvoicePrintView(billId) {
                 tbody.appendChild(tr);
             });
             
+            // Render Related Bills for the same contact number (recent above, old below)
+            const relatedContainer = document.getElementById('related-bills-container');
+            const relatedList = document.getElementById('related-bills-list');
+            const relatedContactNo = document.getElementById('related-contact-no');
+            
+            if (data.contact && data.related_bills && data.related_bills.length > 0) {
+                relatedContainer.style.display = 'block';
+                relatedContactNo.textContent = data.contact;
+                relatedList.innerHTML = '';
+                
+                data.related_bills.forEach(rel => {
+                    const rTr = document.createElement('tr');
+                    const isCurrent = (rel.bill_id === data.bill_id);
+                    if (isCurrent) {
+                        rTr.style.background = 'rgba(79, 70, 229, 0.08)';
+                    }
+                    
+                    rTr.innerHTML = `
+                        <td><code>${rel.bill_id}</code> ${isCurrent ? '<span class="badge badge-primary" style="font-size: 10px; margin-left: 4px;">Current</span>' : ''}</td>
+                        <td><strong>${rel.cust_name}</strong></td>
+                        <td>${rel.dt_purchase}</td>
+                        <td><span class="badge badge-secondary">${rel.payment_mode}</span></td>
+                        <td><strong>₹${rel.total_amount.toFixed(2)}</strong></td>
+                        <td class="text-center">
+                            ${isCurrent ? '<span style="font-size: 11px; color: var(--text-muted);">Viewing</span>' : `<button class="btn btn-secondary btn-sm" onclick="openInvoicePrintView('${rel.bill_id}')" style="padding: 2px 8px; font-size: 11px;">👁️ View</button>`}
+                        </td>
+                    `;
+                    relatedList.appendChild(rTr);
+                });
+            } else {
+                relatedContainer.style.display = 'none';
+            }
+
             invoiceModal.classList.add('active');
         } else {
             showToast(result.error, 'error');

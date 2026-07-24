@@ -1415,3 +1415,26 @@ input:focus {
         display: none !important;
     }
 }
+
+/* Contact Grouping Table Styles */
+.contact-pill {
+    background: rgba(79, 70, 229, 0.08);
+    color: var(--primary);
+    border: 1px solid rgba(79, 70, 229, 0.2);
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.grouped-same-contact {
+    background-color: rgba(79, 70, 229, 0.03) !important;
+    border-left: 3px solid var(--primary);
+}
+
+.group-header-contact {
+    border-top: 2px solid rgba(79, 70, 229, 0.15);
+}
