@@ -9,6 +9,8 @@ let billingHistory = [];
 let draftPurchasedItems = []; // Newly bought items in current bill invoice being created
 let draftReturnedItems = []; // Returned items in current bill invoice
 let selectedReturnItemKey = ''; // Key for returned item selected from suggestions
+let selectedBillingItem = null; // Object holding currently selected billing item
+let selectedReturnItem = null;  // Object holding currently selected return item
 let hasWarnedExpiry = false; // Expiry toast helper
 let html5QrcodeScanner = null; // Scanner instance
 let scannerTargetInputId = null; // Target field ID for scanned value
@@ -157,13 +159,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 row.addEventListener('click', () => {
                     itemSearchInput.value = item.name;
-                    
-                    // Select key in hidden selector
                     itemSelector.value = item.key;
-                    
-                    // Dispatch change event to populate unit price
-                    itemSelector.dispatchEvent(new Event('change'));
-                    
+                    selectedBillingItem = item;
+                    updateBillingUnitCalculation();
                     suggestionsBox.classList.remove('active');
                     document.getElementById('bill-item-qty').focus();
                 });
@@ -173,6 +171,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         suggestionsBox.classList.add('active');
     });
+
+    // Listeners for sale unit and qty changes
+    const saleTypeSelect = document.getElementById('bill-sale-type');
+    const itemQtyInput = document.getElementById('bill-item-qty');
+    if (saleTypeSelect) saleTypeSelect.addEventListener('change', updateBillingUnitCalculation);
+    if (itemQtyInput) itemQtyInput.addEventListener('input', updateBillingUnitCalculation);
 
     // Hide suggestions when clicking outside
     document.addEventListener('click', (e) => {
@@ -224,8 +228,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                     row.addEventListener('click', () => {
                         returnSearchInput.value = item.name;
-                        document.getElementById('bill-return-price').value = item.price.toFixed(2);
                         selectedReturnItemKey = item.key;
+                        selectedReturnItem = item;
+                        updateReturnUnitCalculation();
                         returnSuggestionsBox.classList.remove('active');
                         document.getElementById('bill-return-qty').focus();
                     });
@@ -234,6 +239,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             returnSuggestionsBox.classList.add('active');
         });
+
+        const returnUnitSelect = document.getElementById('bill-return-unit');
+        const returnQtyInput = document.getElementById('bill-return-qty');
+        if (returnUnitSelect) returnUnitSelect.addEventListener('change', updateReturnUnitCalculation);
+        if (returnQtyInput) returnQtyInput.addEventListener('input', updateReturnUnitCalculation);
 
         document.addEventListener('click', (e) => {
             if (e.target !== returnSearchInput && e.target !== returnSuggestionsBox && !returnSuggestionsBox.contains(e.target)) {
@@ -889,6 +899,15 @@ async function deleteDevice(id) {
 // Billing, Customer & Invoice Logic
 // --------------------------------------------------------------------------
 
+function parseQtyPerStrip(catStr) {
+    if (!catStr) return 1;
+    const match = catStr.toString().match(/(\d+)/);
+    if (match && parseInt(match[1]) > 0) {
+        return parseInt(match[1]);
+    }
+    return 1;
+}
+
 // Populate dropdown of select items in the billing form
 async function populateBillingItemsDropdown() {
     try {
@@ -905,20 +924,26 @@ async function populateBillingItemsDropdown() {
         if (medResult.success) {
             medResult.data.forEach(med => {
                 if (med.medstock > 0) {
+                    const qtyPerStrip = parseQtyPerStrip(med.category);
+                    const stripPrice = parseFloat(med.price);
                     const opt = document.createElement('option');
                     opt.value = `med:${med.med_code}`;
-                    opt.textContent = `[Medicine] ${med.med_name} (Stock: ${med.medstock}) - ₹${parseFloat(med.price).toFixed(2)}`;
+                    opt.textContent = `[Medicine] ${med.med_name} (Stock: ${med.medstock}) - ₹${stripPrice.toFixed(2)}`;
                     opt.dataset.price = med.price;
                     opt.dataset.name = med.med_name;
                     opt.dataset.maxStock = med.medstock;
+                    opt.dataset.qtyPerStrip = qtyPerStrip;
+                    opt.dataset.type = 'Medicine';
                     selector.appendChild(opt);
                     
                     // Cache item for suggestions
                     allBillingItems.push({
                         key: `med:${med.med_code}`,
                         name: med.med_name,
-                        price: parseFloat(med.price),
-                        stock: parseInt(med.medstock),
+                        price: stripPrice,
+                        stripPrice: stripPrice,
+                        qtyPerStrip: qtyPerStrip,
+                        stock: parseFloat(med.medstock),
                         type: 'Medicine'
                     });
                 }
@@ -934,6 +959,8 @@ async function populateBillingItemsDropdown() {
                     opt.dataset.price = dev.price;
                     opt.dataset.name = dev.name;
                     opt.dataset.maxStock = dev.stock;
+                    opt.dataset.qtyPerStrip = 1;
+                    opt.dataset.type = 'Device';
                     selector.appendChild(opt);
                     
                     // Cache item for suggestions
@@ -941,6 +968,8 @@ async function populateBillingItemsDropdown() {
                         key: `dev:${dev.machine_id}`,
                         name: dev.name,
                         price: parseFloat(dev.price),
+                        stripPrice: parseFloat(dev.price),
+                        qtyPerStrip: 1,
                         stock: parseInt(dev.stock),
                         type: 'Device'
                     });
@@ -952,56 +981,137 @@ async function populateBillingItemsDropdown() {
     }
 }
 
+function updateBillingUnitCalculation() {
+    const saleTypeSelect = document.getElementById('bill-sale-type');
+    const qtyInput = document.getElementById('bill-item-qty');
+    const priceInput = document.getElementById('bill-item-price');
+    const qtyLabel = document.getElementById('bill-qty-label');
+    const priceLabel = document.getElementById('bill-price-label');
+    const calcInfoDiv = document.getElementById('unit-calc-info');
+
+    if (!selectedBillingItem) {
+        calcInfoDiv.style.display = 'none';
+        return;
+    }
+
+    const isLoose = (saleTypeSelect.value === 'loose' && selectedBillingItem.type === 'Medicine');
+    const qtyPerStrip = selectedBillingItem.qtyPerStrip || 1;
+    const stripPrice = selectedBillingItem.stripPrice || selectedBillingItem.price || 0;
+    const perTabletPrice = stripPrice / qtyPerStrip;
+    const qty = parseInt(qtyInput.value) || 1;
+
+    if (selectedBillingItem.type === 'Device') {
+        saleTypeSelect.value = 'strip';
+        saleTypeSelect.disabled = true;
+    } else {
+        saleTypeSelect.disabled = false;
+    }
+
+    if (isLoose) {
+        qtyLabel.textContent = 'No. of Loose Tablets';
+        priceLabel.textContent = 'Price Per Tablet (₹)';
+        priceInput.value = perTabletPrice.toFixed(2);
+        
+        const total = (qty * perTabletPrice).toFixed(2);
+        calcInfoDiv.style.display = 'block';
+        calcInfoDiv.innerHTML = `💡 <strong>${selectedBillingItem.name}</strong>: 1 Strip (${qtyPerStrip} tabs) = ₹${stripPrice.toFixed(2)} | <strong>${qty} Loose Tab(s)</strong> @ ₹${perTabletPrice.toFixed(2)}/tab = <strong>₹${total}</strong>`;
+    } else {
+        qtyLabel.textContent = 'No. of Strips';
+        priceLabel.textContent = 'Strip Price (₹)';
+        priceInput.value = stripPrice.toFixed(2);
+
+        const total = (qty * stripPrice).toFixed(2);
+        calcInfoDiv.style.display = 'block';
+        if (selectedBillingItem.type === 'Medicine') {
+            calcInfoDiv.innerHTML = `💡 <strong>${selectedBillingItem.name}</strong>: <strong>${qty} Full Strip(s)</strong> (${qty * qtyPerStrip} tabs total) @ ₹${stripPrice.toFixed(2)}/strip = <strong>₹${total}</strong>`;
+        } else {
+            calcInfoDiv.innerHTML = `💡 <strong>${selectedBillingItem.name}</strong>: <strong>${qty} Unit(s)</strong> @ ₹${stripPrice.toFixed(2)} = <strong>₹${total}</strong>`;
+        }
+    }
+}
+
+function updateReturnUnitCalculation() {
+    const returnUnitSelect = document.getElementById('bill-return-unit');
+    const qtyInput = document.getElementById('bill-return-qty');
+    const priceInput = document.getElementById('bill-return-price');
+    const qtyLabel = document.getElementById('bill-return-qty-label');
+    const priceLabel = document.getElementById('bill-return-price-label');
+    const calcInfoDiv = document.getElementById('return-unit-calc-info');
+
+    if (!selectedReturnItem) {
+        calcInfoDiv.style.display = 'none';
+        return;
+    }
+
+    const isLoose = (returnUnitSelect.value === 'loose' && selectedReturnItem.type === 'Medicine');
+    const qtyPerStrip = selectedReturnItem.qtyPerStrip || 1;
+    const stripPrice = selectedReturnItem.stripPrice || selectedReturnItem.price || parseFloat(priceInput.value) || 0;
+    const perTabletPrice = stripPrice / qtyPerStrip;
+    const qty = parseInt(qtyInput.value) || 1;
+
+    if (isLoose) {
+        qtyLabel.textContent = 'Return Loose Tabs';
+        priceLabel.textContent = 'Return Tablet Price (₹)';
+        priceInput.value = perTabletPrice.toFixed(2);
+        
+        const total = (qty * perTabletPrice).toFixed(2);
+        calcInfoDiv.style.display = 'block';
+        calcInfoDiv.innerHTML = `💡 Return Deduction: <strong>${selectedReturnItem.name}</strong>: <strong>${qty} Loose Tab(s)</strong> @ ₹${perTabletPrice.toFixed(2)}/tab = <strong>-₹${total}</strong>`;
+    } else {
+        qtyLabel.textContent = 'Return Strips';
+        priceLabel.textContent = 'Return Strip Price (₹)';
+        priceInput.value = stripPrice.toFixed(2);
+
+        const total = (qty * stripPrice).toFixed(2);
+        calcInfoDiv.style.display = 'block';
+        calcInfoDiv.innerHTML = `💡 Return Deduction: <strong>${selectedReturnItem.name}</strong>: <strong>${qty} Full Strip(s)</strong> @ ₹${stripPrice.toFixed(2)}/strip = <strong>-₹${total}</strong>`;
+    }
+}
+
 // Add item to active draft list (Purchased)
 function addItemToDraftList() {
-    const selector = document.getElementById('bill-item-selector');
-    const selectedOption = selector.options[selector.selectedIndex];
-    const qtyInput = document.getElementById('bill-item-qty');
-    const qty = parseInt(qtyInput.value);
-    
-    if (!selectedOption || !selectedOption.value) {
+    if (!selectedBillingItem) {
         showToast('Please select a valid item first.', 'warning');
         return;
     }
     
-    const price = parseFloat(selectedOption.dataset.price);
-    const name = selectedOption.dataset.name;
-    const maxStock = parseInt(selectedOption.dataset.maxStock);
-    const itemKey = selectedOption.value;
+    const saleType = document.getElementById('bill-sale-type').value;
+    const qtyInput = document.getElementById('bill-item-qty');
+    const qty = parseInt(qtyInput.value);
     
     if (isNaN(qty) || qty <= 0) {
         showToast('Quantity must be greater than 0.', 'warning');
         return;
     }
     
-    if (qty > maxStock) {
-        showToast(`Quantity exceeded available stock (${maxStock} units max).`, 'warning');
-        return;
+    const isLoose = (saleType === 'loose' && selectedBillingItem.type === 'Medicine');
+    const qtyPerStrip = selectedBillingItem.qtyPerStrip || 1;
+    const stripPrice = selectedBillingItem.stripPrice || selectedBillingItem.price || 0;
+    const unitPrice = isLoose ? (stripPrice / qtyPerStrip) : stripPrice;
+    const total = qty * unitPrice;
+    const deductionQty = isLoose ? (qty / qtyPerStrip) : qty; // Fractional strips e.g. 5/10 = 0.5
+    
+    let displayName = selectedBillingItem.name;
+    if (isLoose) {
+        displayName = `${selectedBillingItem.name} (${qty} Loose Tabs)`;
     }
     
-    const existingIndex = draftPurchasedItems.findIndex(item => item.key === itemKey);
-    if (existingIndex > -1) {
-        const newQty = draftPurchasedItems[existingIndex].quantity + qty;
-        if (newQty > maxStock) {
-            showToast(`Total quantity in draft (${newQty}) exceeds available stock (${maxStock}).`, 'warning');
-            return;
-        }
-        draftPurchasedItems[existingIndex].quantity = newQty;
-        draftPurchasedItems[existingIndex].total = newQty * price;
-    } else {
-        draftPurchasedItems.push({
-            key: itemKey,
-            item_name: name,
-            quantity: qty,
-            price: price,
-            total: qty * price
-        });
-    }
+    draftPurchasedItems.push({
+        key: selectedBillingItem.key,
+        item_name: displayName,
+        quantity: qty,
+        unit_type: isLoose ? 'Tabs' : 'Strips',
+        price: unitPrice,
+        total: total,
+        deduction_qty: deductionQty
+    });
     
-    selector.selectedIndex = 0;
+    // Reset inputs
     document.getElementById('bill-item-search').value = '';
     document.getElementById('bill-item-price').value = '';
     qtyInput.value = '1';
+    selectedBillingItem = null;
+    document.getElementById('unit-calc-info').style.display = 'none';
     
     renderDraftInvoiceTables();
 }
@@ -1011,10 +1121,12 @@ function addReturnedItemToDraft() {
     const nameInput = document.getElementById('bill-return-search');
     const qtyInput = document.getElementById('bill-return-qty');
     const priceInput = document.getElementById('bill-return-price');
+    const returnUnitSelect = document.getElementById('bill-return-unit');
     
     const name = nameInput.value.trim();
     const qty = parseInt(qtyInput.value);
-    const price = parseFloat(priceInput.value);
+    let price = parseFloat(priceInput.value);
+    const saleType = returnUnitSelect.value;
     
     if (!name) {
         showToast('Please enter or select a returned medicine name.', 'warning');
@@ -1025,22 +1137,35 @@ function addReturnedItemToDraft() {
         return;
     }
     if (isNaN(price) || price < 0) {
-        showToast('Please enter a valid price per unit for returned item.', 'warning');
+        showToast('Please enter a valid price for returned item.', 'warning');
         return;
+    }
+
+    const qtyPerStrip = selectedReturnItem ? (selectedReturnItem.qtyPerStrip || 1) : 1;
+    const isLoose = (saleType === 'loose');
+    const deductionQty = isLoose ? (qty / qtyPerStrip) : qty;
+    const total = qty * price;
+    
+    let displayName = name;
+    if (isLoose && !name.toLowerCase().includes('loose')) {
+        displayName = `${name} (${qty} Loose Tabs)`;
     }
     
     draftReturnedItems.push({
-        key: selectedReturnItemKey || '',
-        item_name: name,
+        key: selectedReturnItem ? selectedReturnItem.key : '',
+        item_name: displayName,
         quantity: qty,
+        unit_type: isLoose ? 'Tabs' : 'Strips',
         price: price,
-        total: qty * price
+        total: total,
+        deduction_qty: deductionQty
     });
     
     nameInput.value = '';
     priceInput.value = '';
     qtyInput.value = '1';
-    selectedReturnItemKey = '';
+    selectedReturnItem = null;
+    document.getElementById('return-unit-calc-info').style.display = 'none';
     
     renderDraftInvoiceTables();
 }

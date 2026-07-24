@@ -308,17 +308,25 @@
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="bill-item-qty">Quantity</label>
+                                    <label for="bill-sale-type">Sale Unit</label>
+                                    <select id="bill-sale-type">
+                                        <option value="strip">Full Strip(s)</option>
+                                        <option value="loose">Loose Tablet(s) / Cut Strip</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bill-item-qty" id="bill-qty-label">No. of Strips</label>
                                     <input type="number" id="bill-item-qty" value="1" min="1">
                                 </div>
                                 <div class="form-group">
-                                    <label for="bill-item-price">Price Per Unit (₹)</label>
+                                    <label for="bill-item-price" id="bill-price-label">Price Per Unit (₹)</label>
                                     <input type="number" id="bill-item-price" step="0.01" readonly>
                                 </div>
                                 <div class="form-group align-end">
                                     <button type="button" class="btn btn-secondary" id="add-item-to-list-btn">+ Add Item</button>
                                 </div>
                             </div>
+                            <div id="unit-calc-info" style="font-size: 12px; color: var(--primary); font-weight: 600; background: rgba(79, 70, 229, 0.06); padding: 6px 12px; border-radius: var(--radius-sm); margin-bottom: 12px; display: none;"></div>
 
                             <!-- Invoice Draft Purchased Items Table -->
                             <div class="table-wrapper mini-table">
@@ -358,17 +366,25 @@
                                     <div id="bill-return-suggestions" class="suggestions-dropdown"></div>
                                 </div>
                                 <div class="form-group">
-                                    <label for="bill-return-qty">Return Qty</label>
+                                    <label for="bill-return-unit">Return Unit</label>
+                                    <select id="bill-return-unit">
+                                        <option value="strip">Full Strip(s)</option>
+                                        <option value="loose">Loose Tablet(s) / Cut Strip</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="bill-return-qty" id="bill-return-qty-label">Return Qty</label>
                                     <input type="number" id="bill-return-qty" value="1" min="1">
                                 </div>
                                 <div class="form-group">
-                                    <label for="bill-return-price">Price Per Unit (₹)</label>
+                                    <label for="bill-return-price" id="bill-return-price-label">Price Per Unit (₹)</label>
                                     <input type="number" id="bill-return-price" step="0.01" placeholder="₹0.00">
                                 </div>
                                 <div class="form-group align-end">
                                     <button type="button" class="btn btn-secondary" id="add-return-item-btn" style="background: rgba(13, 148, 136, 0.1); color: var(--accent); border-color: rgba(13, 148, 136, 0.3);">- Add Returned Item</button>
                                 </div>
                             </div>
+                            <div id="return-unit-calc-info" style="font-size: 12px; color: var(--accent); font-weight: 600; background: rgba(13, 148, 136, 0.06); padding: 6px 12px; border-radius: var(--radius-sm); margin-bottom: 12px; display: none;"></div>
 
                             <!-- Invoice Draft Returned Items Table -->
                             <div class="table-wrapper mini-table">

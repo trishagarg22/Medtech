@@ -32,6 +32,16 @@ def init_db():
                 VALUES ('admin', 'admin123', 'owner123')
             """)
             conn.commit()
+            
+        # Ensure column types allow float stocks and longer item descriptions for loose tablets
+        try:
+            cursor.execute("ALTER TABLE med_list MODIFY COLUMN medstock FLOAT DEFAULT 0")
+            cursor.execute("ALTER TABLE med_list MODIFY COLUMN med_name VARCHAR(100)")
+            cursor.execute("ALTER TABLE Bill MODIFY COLUMN item_name VARCHAR(100)")
+            conn.commit()
+        except Exception as ex:
+            print(f"Table alter notice: {ex}")
+
         cursor.close()
         conn.close()
     except Exception as e:
@@ -465,8 +475,9 @@ def create_bill():
             name = item.get('item_name')
             qty = int(item.get('quantity', 1))
             price = float(item.get('price', 0))
-            total = qty * price
+            total = float(item.get('total', qty * price))
             key = item.get('key', '')
+            deduction_qty = float(item.get('deduction_qty', qty))
             
             # Check and update stock
             if key.startswith('med:'):
@@ -475,10 +486,10 @@ def create_bill():
                 row = cursor.fetchone()
                 if not row:
                     raise ValueError(f"Medicine code {med_code} not found in database.")
-                current_stock = row[0]
-                if current_stock < qty:
-                    raise ValueError(f"Insufficient stock for medicine '{row[1]}'. Available: {current_stock}, Requested: {qty}")
-                cursor.execute("UPDATE med_list SET medstock = medstock - %s WHERE med_code = %s", (qty, med_code))
+                current_stock = float(row[0])
+                if current_stock < deduction_qty:
+                    raise ValueError(f"Insufficient stock for medicine '{row[1]}'. Available: {current_stock} strips, Requested: {deduction_qty} strips")
+                cursor.execute("UPDATE med_list SET medstock = medstock - %s WHERE med_code = %s", (deduction_qty, med_code))
                 
             elif key.startswith('dev:'):
                 machine_id = key.split(':', 1)[1]
@@ -486,7 +497,7 @@ def create_bill():
                 row = cursor.fetchone()
                 if not row:
                     raise ValueError(f"Device ID {machine_id} not found in database.")
-                current_stock = row[0]
+                current_stock = float(row[0])
                 if current_stock < qty:
                     raise ValueError(f"Insufficient stock for device '{row[1]}'. Available: {current_stock}, Requested: {qty}")
                 cursor.execute("UPDATE pharma_devices SET stock = stock - %s WHERE machine_id = %s", (qty, machine_id))
@@ -503,13 +514,14 @@ def create_bill():
             name = ret_item.get('item_name', '')
             qty = int(ret_item.get('quantity', 1))
             price = float(ret_item.get('price', 0))
-            total = - (qty * price)  # Negative total to subtract from total bill
+            total = - float(ret_item.get('total', qty * price))  # Negative total to subtract from total bill
             key = ret_item.get('key', '')
+            deduction_qty = float(ret_item.get('deduction_qty', qty))
             
             # Add stock back to inventory
             if key.startswith('med:'):
                 med_code = key.split(':', 1)[1]
-                cursor.execute("UPDATE med_list SET medstock = medstock + %s WHERE med_code = %s", (qty, med_code))
+                cursor.execute("UPDATE med_list SET medstock = medstock + %s WHERE med_code = %s", (deduction_qty, med_code))
             elif key.startswith('dev:'):
                 machine_id = key.split(':', 1)[1]
                 cursor.execute("UPDATE pharma_devices SET stock = stock + %s WHERE machine_id = %s", (qty, machine_id))
@@ -518,7 +530,7 @@ def create_bill():
                 cursor.execute("SELECT med_code FROM med_list WHERE med_name = %s", (name,))
                 m_row = cursor.fetchone()
                 if m_row:
-                    cursor.execute("UPDATE med_list SET medstock = medstock + %s WHERE med_code = %s", (qty, m_row[0]))
+                    cursor.execute("UPDATE med_list SET medstock = medstock + %s WHERE med_code = %s", (deduction_qty, m_row[0]))
                 else:
                     cursor.execute("SELECT machine_id FROM pharma_devices WHERE name = %s", (name,))
                     d_row = cursor.fetchone()
