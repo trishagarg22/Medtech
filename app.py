@@ -362,7 +362,7 @@ def get_bill_detail(bill_id):
         cursor = conn.cursor(dictionary=True)
         query = """
             SELECT c.cust_name, c.address, c.contact, 
-                   b.bill_id, b.dt_purchase, b.item_name, b.quantity, b.price, b.total, b.payment_mode
+                   b.bill_id, b.dt_purchase, b.item_name, b.quantity, b.price, b.total, b.payment_mode, b.pack, b.expiry
             FROM Bill b
             JOIN Customer c ON b.cust_id = c.cust_id
             WHERE b.bill_id = %s
@@ -390,20 +390,27 @@ def get_bill_detail(bill_id):
         for r in rows:
             qty = r["quantity"]
             tot = float(r["total"])
-            if qty < 0 or tot < 0:
-                bill_info["returned_items"].append({
-                    "item_name": r["item_name"],
-                    "quantity": abs(qty),
-                    "price": float(r["price"]),
-                    "total": abs(tot)
-                })
+            pack_val = str(r.get("pack") or "-")
+            expiry_val = r.get("expiry") or "-"
+            if isinstance(expiry_val, (date, datetime)):
+                expiry_val = expiry_val.strftime('%Y-%m-%d')
             else:
-                bill_info["items"].append({
-                    "item_name": r["item_name"],
-                    "quantity": qty,
-                    "price": float(r["price"]),
-                    "total": tot
-                })
+                expiry_val = str(expiry_val)
+
+            item_data = {
+                "item_name": r["item_name"],
+                "pack": pack_val,
+                "expiry": expiry_val,
+                "quantity": abs(qty),
+                "price": float(r["price"]),
+                "total": abs(tot)
+            }
+
+            if qty < 0 or tot < 0:
+                bill_info["returned_items"].append(item_data)
+            else:
+                item_data["quantity"] = qty
+                bill_info["items"].append(item_data)
             bill_info["total_amount"] += tot
             
         bill_info["total_amount"] = round(bill_info["total_amount"], 2)
@@ -478,6 +485,8 @@ def create_bill():
             total = float(item.get('total', qty * price))
             key = item.get('key', '')
             deduction_qty = float(item.get('deduction_qty', qty))
+            pack = str(item.get('pack', '-'))
+            expiry = str(item.get('expiry', '-'))
             
             # Check and update stock
             if key.startswith('med:'):
@@ -504,9 +513,9 @@ def create_bill():
             
             cursor.execute(
                 """INSERT INTO Bill 
-                   (bill_id, cust_id, item_name, quantity, price, total, dt_purchase, payment_mode) 
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-                (bill_id, cust_id, name, qty, price, total, dt_purchase, payment_mode)
+                   (bill_id, cust_id, item_name, quantity, price, total, dt_purchase, payment_mode, pack, expiry) 
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (bill_id, cust_id, name, qty, price, total, dt_purchase, payment_mode, pack, expiry)
             )
 
         # 3. Insert Returned items (Old medicines returned by customer)
@@ -517,6 +526,8 @@ def create_bill():
             total = - float(ret_item.get('total', qty * price))  # Negative total to subtract from total bill
             key = ret_item.get('key', '')
             deduction_qty = float(ret_item.get('deduction_qty', qty))
+            pack = str(ret_item.get('pack', '-'))
+            expiry = str(ret_item.get('expiry', '-'))
             
             # Add stock back to inventory
             if key.startswith('med:'):
@@ -540,9 +551,9 @@ def create_bill():
             displayName = name if "(Returned)" in name else f"{name} (Returned)"
             cursor.execute(
                 """INSERT INTO Bill 
-                   (bill_id, cust_id, item_name, quantity, price, total, dt_purchase, payment_mode) 
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-                (bill_id, cust_id, displayName, -qty, price, total, dt_purchase, payment_mode)
+                   (bill_id, cust_id, item_name, quantity, price, total, dt_purchase, payment_mode, pack, expiry) 
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (bill_id, cust_id, displayName, -qty, price, total, dt_purchase, payment_mode, pack, expiry)
             )
             
         conn.commit()

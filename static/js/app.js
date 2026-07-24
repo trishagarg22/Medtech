@@ -943,6 +943,8 @@ async function populateBillingItemsDropdown() {
                         price: stripPrice,
                         stripPrice: stripPrice,
                         qtyPerStrip: qtyPerStrip,
+                        pack: med.category || `${qtyPerStrip} tabs`,
+                        expiry: med.expire_date || '-',
                         stock: parseFloat(med.medstock),
                         type: 'Medicine'
                     });
@@ -970,6 +972,8 @@ async function populateBillingItemsDropdown() {
                         price: parseFloat(dev.price),
                         stripPrice: parseFloat(dev.price),
                         qtyPerStrip: 1,
+                        pack: '-',
+                        expiry: '-',
                         stock: parseInt(dev.stock),
                         type: 'Device'
                     });
@@ -994,18 +998,29 @@ function updateBillingUnitCalculation() {
         return;
     }
 
-    const isLoose = (saleTypeSelect.value === 'loose' && selectedBillingItem.type === 'Medicine');
-    const qtyPerStrip = selectedBillingItem.qtyPerStrip || 1;
-    const stripPrice = selectedBillingItem.stripPrice || selectedBillingItem.price || 0;
-    const perTabletPrice = stripPrice / qtyPerStrip;
     const qty = parseInt(qtyInput.value) || 1;
+    const stripPrice = selectedBillingItem.stripPrice || selectedBillingItem.price || 0;
 
     if (selectedBillingItem.type === 'Device') {
+        saleTypeSelect.innerHTML = `<option value="strip">Full Piece(s)</option>`;
         saleTypeSelect.value = 'strip';
-        saleTypeSelect.disabled = true;
-    } else {
         saleTypeSelect.disabled = false;
+        qtyLabel.textContent = 'No. of Pieces';
+        priceLabel.textContent = 'Price Per Piece (₹)';
+        priceInput.value = stripPrice.toFixed(2);
+        
+        const total = (qty * stripPrice).toFixed(2);
+        calcInfoDiv.style.display = 'block';
+        calcInfoDiv.innerHTML = `💡 <strong>${selectedBillingItem.name}</strong>: <strong>${qty} Piece(s)</strong> @ ₹${stripPrice.toFixed(2)} = <strong>₹${total}</strong>`;
+        return;
     }
+
+    saleTypeSelect.innerHTML = `<option value="strip">Full Strip(s)</option><option value="loose">Loose Tablet(s) / Cut Strip</option>`;
+    saleTypeSelect.disabled = false;
+
+    const isLoose = (saleTypeSelect.value === 'loose');
+    const qtyPerStrip = selectedBillingItem.qtyPerStrip || 1;
+    const perTabletPrice = stripPrice / qtyPerStrip;
 
     if (isLoose) {
         qtyLabel.textContent = 'No. of Loose Tablets';
@@ -1022,11 +1037,7 @@ function updateBillingUnitCalculation() {
 
         const total = (qty * stripPrice).toFixed(2);
         calcInfoDiv.style.display = 'block';
-        if (selectedBillingItem.type === 'Medicine') {
-            calcInfoDiv.innerHTML = `💡 <strong>${selectedBillingItem.name}</strong>: <strong>${qty} Full Strip(s)</strong> (${qty * qtyPerStrip} tabs total) @ ₹${stripPrice.toFixed(2)}/strip = <strong>₹${total}</strong>`;
-        } else {
-            calcInfoDiv.innerHTML = `💡 <strong>${selectedBillingItem.name}</strong>: <strong>${qty} Unit(s)</strong> @ ₹${stripPrice.toFixed(2)} = <strong>₹${total}</strong>`;
-        }
+        calcInfoDiv.innerHTML = `💡 <strong>${selectedBillingItem.name}</strong>: <strong>${qty} Full Strip(s)</strong> (${qty * qtyPerStrip} tabs total) @ ₹${stripPrice.toFixed(2)}/strip = <strong>₹${total}</strong>`;
     }
 }
 
@@ -1096,11 +1107,16 @@ function addItemToDraftList() {
         displayName = `${selectedBillingItem.name} (${qty} Loose Tabs)`;
     }
     
+    const itemPack = selectedBillingItem.type === 'Medicine' ? (selectedBillingItem.pack || selectedBillingItem.qtyPerStrip || '-') : '-';
+    const itemExpiry = selectedBillingItem.expiry || '-';
+
     draftPurchasedItems.push({
         key: selectedBillingItem.key,
         item_name: displayName,
+        pack: itemPack,
+        expiry: itemExpiry,
         quantity: qty,
-        unit_type: isLoose ? 'Tabs' : 'Strips',
+        unit_type: isLoose ? 'Tabs' : (selectedBillingItem.type === 'Device' ? 'Pcs' : 'Strips'),
         price: unitPrice,
         total: total,
         deduction_qty: deductionQty
@@ -1151,11 +1167,16 @@ function addReturnedItemToDraft() {
         displayName = `${name} (${qty} Loose Tabs)`;
     }
     
+    const returnPack = selectedReturnItem ? (selectedReturnItem.type === 'Medicine' ? (selectedReturnItem.pack || selectedReturnItem.qtyPerStrip || '-') : '-') : '-';
+    const returnExpiry = selectedReturnItem ? (selectedReturnItem.expiry || '-') : '-';
+
     draftReturnedItems.push({
         key: selectedReturnItem ? selectedReturnItem.key : '',
         item_name: displayName,
+        pack: returnPack,
+        expiry: returnExpiry,
         quantity: qty,
-        unit_type: isLoose ? 'Tabs' : 'Strips',
+        unit_type: isLoose ? 'Tabs' : (selectedReturnItem && selectedReturnItem.type === 'Device' ? 'Pcs' : 'Strips'),
         price: price,
         total: total,
         deduction_qty: deductionQty
@@ -1182,13 +1203,15 @@ function renderDraftInvoiceTables() {
     let purchasedTotal = 0;
     
     if (draftPurchasedItems.length === 0) {
-        tbodyPurchased.innerHTML = `<tr><td colspan="5" class="empty-table-text">No purchased items added to this bill yet.</td></tr>`;
+        tbodyPurchased.innerHTML = `<tr><td colspan="7" class="empty-table-text">No purchased items added to this bill yet.</td></tr>`;
     } else {
         draftPurchasedItems.forEach((item, index) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><strong>${item.item_name}</strong></td>
-                <td class="text-center">${item.quantity}</td>
+                <td class="text-center"><code>${item.pack || '-'}</code></td>
+                <td class="text-center">${item.expiry || '-'}</td>
+                <td class="text-center">${item.quantity} ${item.unit_type || ''}</td>
                 <td class="text-right">₹${item.price.toFixed(2)}</td>
                 <td class="text-right">₹${item.total.toFixed(2)}</td>
                 <td class="text-center">
@@ -1206,13 +1229,15 @@ function renderDraftInvoiceTables() {
     let returnedTotal = 0;
     
     if (draftReturnedItems.length === 0) {
-        tbodyReturned.innerHTML = `<tr><td colspan="5" class="empty-table-text">No returned medicines added to this bill.</td></tr>`;
+        tbodyReturned.innerHTML = `<tr><td colspan="7" class="empty-table-text">No returned medicines added to this bill.</td></tr>`;
     } else {
         draftReturnedItems.forEach((item, index) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><strong>${item.item_name}</strong></td>
-                <td class="text-center">${item.quantity}</td>
+                <td class="text-center"><code>${item.pack || '-'}</code></td>
+                <td class="text-center">${item.expiry || '-'}</td>
+                <td class="text-center">${item.quantity} ${item.unit_type || ''}</td>
                 <td class="text-right">₹${item.price.toFixed(2)}</td>
                 <td class="text-right" style="color: var(--accent);">-₹${item.total.toFixed(2)}</td>
                 <td class="text-center">
@@ -1382,6 +1407,8 @@ async function openInvoicePrintView(billId) {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><strong>${item.item_name}</strong></td>
+                    <td class="text-center"><code>${item.pack || '-'}</code></td>
+                    <td class="text-center">${item.expiry || '-'}</td>
                     <td class="text-center">${item.quantity}</td>
                     <td class="text-right">₹${item.price.toFixed(2)}</td>
                     <td class="text-right">₹${item.total.toFixed(2)}</td>
@@ -1409,6 +1436,8 @@ async function openInvoicePrintView(billId) {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td><strong>${ret.item_name}</strong></td>
+                        <td class="text-center"><code>${ret.pack || '-'}</code></td>
+                        <td class="text-center">${ret.expiry || '-'}</td>
                         <td class="text-center">${ret.quantity}</td>
                         <td class="text-right">₹${ret.price.toFixed(2)}</td>
                         <td class="text-right" style="color: var(--accent);">-₹${ret.total.toFixed(2)}</td>
@@ -1432,7 +1461,7 @@ async function openInvoicePrintView(billId) {
             showToast(result.error, 'error');
         }
     } catch (err) {
-        showToast('Error loading invoice preview.', 'error');
+        showToast('Error displaying invoice receipt.', 'error');
     }
 }
 
