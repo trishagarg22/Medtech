@@ -1302,39 +1302,6 @@ async function openInvoicePrintView(billId) {
 
             document.getElementById('inv-total-amount').textContent = `₹${data.total_amount.toFixed(2)}`;
             
-            // Render Related Bills for the same contact number (recent above, old below)
-            const relatedContainer = document.getElementById('related-bills-container');
-            const relatedList = document.getElementById('related-bills-list');
-            const relatedContactNo = document.getElementById('related-contact-no');
-            
-            if (data.contact && data.related_bills && data.related_bills.length > 0) {
-                relatedContainer.style.display = 'block';
-                relatedContactNo.textContent = data.contact;
-                relatedList.innerHTML = '';
-                
-                data.related_bills.forEach(rel => {
-                    const rTr = document.createElement('tr');
-                    const isCurrent = (rel.bill_id === data.bill_id);
-                    if (isCurrent) {
-                        rTr.style.background = 'rgba(79, 70, 229, 0.08)';
-                    }
-                    
-                    rTr.innerHTML = `
-                        <td><code>${rel.bill_id}</code> ${isCurrent ? '<span class="badge badge-primary" style="font-size: 10px; margin-left: 4px;">Current</span>' : ''}</td>
-                        <td><strong>${rel.cust_name}</strong></td>
-                        <td>${rel.dt_purchase}</td>
-                        <td><span class="badge badge-secondary">${rel.payment_mode}</span></td>
-                        <td><strong>₹${rel.total_amount.toFixed(2)}</strong></td>
-                        <td class="text-center">
-                            ${isCurrent ? '<span style="font-size: 11px; color: var(--text-muted);">Viewing</span>' : `<button class="btn btn-secondary btn-sm" onclick="openInvoicePrintView('${rel.bill_id}')" style="padding: 2px 8px; font-size: 11px;">👁️ View</button>`}
-                        </td>
-                    `;
-                    relatedList.appendChild(rTr);
-                });
-            } else {
-                relatedContainer.style.display = 'none';
-            }
-
             invoiceModal.classList.add('active');
         } else {
             showToast(result.error, 'error');
