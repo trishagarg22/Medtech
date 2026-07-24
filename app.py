@@ -550,15 +550,16 @@ def delete_bill(bill_id):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Check if bill exists
-        cursor.execute("SELECT bill_id FROM Bill WHERE bill_id = %s", (bill_id,))
-        if not cursor.fetchone():
+        clean_bill_id = (bill_id or '').strip()
+        # Check if bill exists (with trim matching)
+        cursor.execute("SELECT bill_id FROM Bill WHERE TRIM(bill_id) = %s", (clean_bill_id,))
+        if not cursor.fetchall():
             cursor.close()
             conn.close()
             return jsonify({"success": False, "error": f"No bill found with ID {bill_id}."}), 404
             
-        # Delete the bill entries without modifying stock
-        cursor.execute("DELETE FROM Bill WHERE bill_id = %s", (bill_id,))
+        # Delete all bill entries for this bill_id without modifying stock
+        cursor.execute("DELETE FROM Bill WHERE TRIM(bill_id) = %s", (clean_bill_id,))
         
         conn.commit()
         cursor.close()

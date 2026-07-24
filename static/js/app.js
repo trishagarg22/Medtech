@@ -292,6 +292,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast(result.message, 'success');
                 closeInvoiceModal();
                 
+                // Instantly remove deleted bill from active memory array
+                const deletedId = (billId || '').trim();
+                billingHistory = billingHistory.filter(b => (b.bill_id || '').trim() !== deletedId);
+                renderHistoryTable(billingHistory);
+                
                 // Refresh billing records and dashboard statistics
                 loadBillingHistory();
                 loadMedicines();
@@ -1162,7 +1167,7 @@ async function submitNewBill(e) {
 // 4. Billing History
 async function loadBillingHistory() {
     try {
-        const response = await fetch('/api/bills');
+        const response = await fetch('/api/bills?t=' + Date.now());
         const result = await response.json();
         if (result.success) {
             billingHistory = result.data;
@@ -1250,18 +1255,11 @@ async function openInvoicePrintView(billId) {
             
             (data.items || []).forEach(item => {
                 const tr = document.createElement('tr');
-                let actionBtnHTML = '';
-                if (item.quantity > 0) {
-                    actionBtnHTML = `<button class="btn-return-item" onclick="promptItemReturn('${data.bill_id}', '${item.item_name}', ${item.quantity})">↩️ Return</button>`;
-                } else {
-                    actionBtnHTML = `<span style="font-size: 11px; color: var(--text-muted); font-style: italic;">Returned</span>`;
-                }
                 tr.innerHTML = `
                     <td><strong>${item.item_name}</strong></td>
                     <td class="text-center">${item.quantity}</td>
                     <td class="text-right">₹${item.price.toFixed(2)}</td>
                     <td class="text-right">₹${item.total.toFixed(2)}</td>
-                    <td class="text-center no-print">${actionBtnHTML}</td>
                 `;
                 purchasedTotal += item.total;
                 tbody.appendChild(tr);
